@@ -1,3 +1,1540 @@
 <!DOCTYPE html>
-<html><head><title>CyberShift</title></head>
-<body><h1>CyberShift</h1><p>Deploy working. Real game coming soon.</p></body></html>
+<html lang="en" class="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#0a0f1d">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>CyberShift — Fraud Simulation Trainer</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+tailwind.config = { darkMode: 'class', theme: { extend: {
+  colors: {
+    cyberdark: '#0a0f1d', cybercard: '#121c2e', cyberborder: '#1e293b',
+    cyberblue: '#38bdf8', cyberpurple: '#a855f7',
+    cyberred: '#f43f5e', cybergreen: '#10b981', cyberamber: '#f59e0b',
+  },
+  fontFamily: {
+    mono: ['"JetBrains Mono"', 'ui-monospace', 'monospace'],
+    sans: ['Inter', 'system-ui', 'sans-serif'],
+  },
+}}};
+</script>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;800&family=Inter:wght@300;400;500;700&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/lucide@latest"></script>
+<style>
+*, *::before, *::after { -webkit-tap-highlight-color: transparent; }
+html { -webkit-text-size-adjust: 100%; touch-action: manipulation; }
+html, body {
+  height: 100%; height: 100dvh; overflow: hidden;
+  overscroll-behavior: none;
+  background: #0a0f1d; color: #f8fafc;
+  font-family: 'Inter', system-ui, sans-serif;
+}
+body { user-select: none; -webkit-user-select: none; }
+input, textarea, select { font-size: 16px !important; }
+button { touch-action: manipulation; }
+.font-mono { font-family: 'JetBrains Mono', ui-monospace, monospace; }
+.scanline {
+  background-image: linear-gradient(rgba(255,255,255,0), rgba(0,0,0,.12) 50%, rgba(0,0,0,.12) 50%);
+  background-size: 100% 4px;
+}
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #1e293b; border-radius: 2px; }
+.app-shell { display: grid; grid-template-rows: auto auto 1fr auto; height: 100dvh; }
+.safe-top    { padding-top:    max(0px, env(safe-area-inset-top)); }
+.safe-bottom { padding-bottom: max(0px, env(safe-area-inset-bottom)); }
+.page-scroll { overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; }
+.app-topbar {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 16px; min-height: 52px;
+  background: rgba(10,15,29,.92); backdrop-filter: blur(10px);
+  border-bottom: 1px solid #1e293b;
+}
+.app-stats {
+  display: grid; grid-template-columns: repeat(3, 1fr);
+  gap: 1px; background: #1e293b; border-bottom: 1px solid #1e293b;
+}
+.app-stats > div { background: #0a0f1d; padding: 8px 12px; text-align: center; }
+.app-bottomnav {
+  display: grid; grid-auto-flow: column; grid-auto-columns: 1fr;
+  background: rgba(18,28,46,.96); backdrop-filter: blur(14px);
+  border-top: 1px solid #1e293b;
+}
+.app-bottomnav button {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 2px; padding: 8px 4px; min-height: 56px;
+  color: #64748b; font-size: 10px;
+  font-family: 'JetBrains Mono', monospace; font-weight: 700; letter-spacing: .05em;
+  transition: color 120ms;
+}
+.app-bottomnav button.active { color: #38bdf8; }
+.app-bottomnav button:active { background: rgba(56,189,248,.08); }
+.tap-card {
+  display: flex; align-items: center; gap: 12px;
+  padding: 14px; border-radius: 12px;
+  background: #121c2e; border: 1px solid #1e293b;
+  min-height: 64px; width: 100%; text-align: left;
+  transition: transform 120ms, border-color 120ms, background 120ms;
+  color: inherit;
+}
+.tap-card:active { transform: scale(.985); border-color: #38bdf8; background: #1a2740; }
+.sheet-backdrop { animation: fade-in 160ms ease-out; }
+.sheet { animation: slide-up 220ms cubic-bezier(.22,1,.36,1); }
+.toast-anim { animation: slide-up 180ms ease-out; }
+.screen-shake { animation: shake 380ms cubic-bezier(.36,.07,.19,.97); }
+.red-flash::after {
+  content: ''; position: fixed; inset: 0; z-index: 60;
+  background: #f43f5e; pointer-events: none;
+  animation: flash 500ms ease-out forwards;
+}
+@keyframes fade-in  { from { opacity: 0 } to { opacity: 1 } }
+@keyframes slide-up { from { transform: translateY(100%) } to { transform: translateY(0) } }
+@keyframes shake {
+  10%, 90% { transform: translate3d(-2px,0,0) }
+  20%, 80% { transform: translate3d(4px,0,0) }
+  30%, 50%, 70% { transform: translate3d(-6px,0,0) }
+  40%, 60% { transform: translate3d(6px,0,0) }
+}
+@keyframes flash { to { opacity: 0 } }
+</style>
+</head>
+<body class="scanline">
+<div id="app"></div>
+<script>
+(function () {
+'use strict';
+
+// ============================================================
+// RNG
+// ============================================================
+let _rng = Math.random;
+function setSeed(seed) {
+  let s = seed >>> 0;
+  _rng = function () {
+    s = (s + 0x6D2B79F5) | 0;
+    let t = Math.imul(s ^ (s >>> 15), 1 | s);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+const rng = () => _rng();
+const randomSeed = () => Math.floor(Math.random() * 0xFFFFFFFF);
+function seedFromString(str) {
+  let h = 2166136261;
+  for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619); }
+  return h >>> 0;
+}
+
+// ============================================================
+// STORE
+// ============================================================
+const KEY = 'cybershift:v7';
+const listeners = new Set();
+
+function defaults() {
+  return {
+    v: 7, role: null, day: 1, phase: 'active', outcome: null,
+    capital: 2450, paranoia: 12, fatigue: 8, readiness: 15,
+    ap: 3, maxAp: 3,
+    entities: { persona: [], account: [], shell: [], wallet: [] },
+    links: [], evidence: [], case: { strength: 0, resolved: [] },
+    seen: [], logs: [], flags: {},
+    progression: { xp: 0, level: 1, skillPoints: 1, skills: [] },
+    seeded: null,
+    attackerSim: { capital: 2000, readiness: 10, paranoia: 8, active: true },
+  };
+}
+
+let state;
+try {
+  const raw = localStorage.getItem(KEY);
+  const parsed = raw ? JSON.parse(raw) : null;
+  state = parsed && parsed.v === 7 ? parsed : defaults();
+} catch { state = defaults(); }
+
+let persistTimer = null;
+function persist() {
+  clearTimeout(persistTimer);
+  persistTimer = setTimeout(() => {
+    try { localStorage.setItem(KEY, JSON.stringify(state)); } catch {}
+  }, 200);
+}
+function subscribe(fn) { listeners.add(fn); return () => listeners.delete(fn); }
+function notify() { persist(); for (const fn of listeners) fn(state); }
+function dispatch(mut) { const r = mut(state); notify(); return r; }
+function reset(role = state.role) {
+  const fresh = defaults();
+  fresh.role = role;
+  Object.keys(state).forEach(k => delete state[k]);
+  Object.assign(state, fresh);
+  notify();
+}
+
+// ============================================================
+// HELPERS
+// ============================================================
+const clamp = (v, lo = 0, hi = 100) => Math.min(hi, Math.max(lo, v));
+let _uidN = 0;
+const uid = (p = 'x') => `${p}_${Date.now().toString(36)}_${(_uidN++).toString(36)}`;
+
+// ============================================================
+// PROGRESSION
+// ============================================================
+const LEVELS = [0, 100, 300, 700, 1500, 3000, 6000, 12000, 25000];
+const SKILLS = {
+  attacker: [
+    { id: 'a1', name: 'Ghost Protocol',  desc: 'Paranoia costs from most actions cut by 25%.',  cost: 1, requires: [] },
+    { id: 'a2', name: 'Stack Master',    desc: 'Stack gives +8 extra readiness.',               cost: 2, requires: ['a1'] },
+    { id: 'a3', name: 'Clean Exit',      desc: 'Bust-out writes 40% less evidence.',            cost: 2, requires: ['a1'] },
+    { id: 'a4', name: 'Shell Game',      desc: 'Shell formation costs $800 instead of $1,200.', cost: 3, requires: ['a2'] },
+    { id: 'a5', name: 'Mixer Sense',     desc: 'Mixer cuts paranoia by 30 instead of 20.',      cost: 3, requires: ['a3'] },
+  ],
+  defender: [
+    { id: 'd1', name: 'Pattern Recognition', desc: 'Attach Evidence gains +20% case strength.',          cost: 1, requires: [] },
+    { id: 'd2', name: 'Velocity Analysis',   desc: 'Case Review reveals all 10 signals, not 9.',         cost: 2, requires: ['d1'] },
+    { id: 'd3', name: 'Link Analysis',       desc: 'Subpoena yields +30% case strength.',                cost: 2, requires: ['d1'] },
+    { id: 'd4', name: 'Fast Track',          desc: 'Warrant available at 80% instead of 90%.',           cost: 3, requires: ['d3'] },
+    { id: 'd5', name: 'Forensics',           desc: 'Redacted evidence becomes readable in Evidence tab.', cost: 3, requires: ['d2'] },
+  ],
+};
+const levelFromXp = xp => {
+  let lvl = 1;
+  for (let i = 0; i < LEVELS.length; i++) if (xp >= LEVELS[i]) lvl = i + 1;
+  return lvl;
+};
+const xpToNext = xp => {
+  const l = levelFromXp(xp);
+  return LEVELS[l] ?? LEVELS[LEVELS.length - 1] + 10000;
+};
+const hasSkill = (s, id) => s.progression?.skills?.includes(id);
+
+function grantXp(s, amount, reason) {
+  s.progression ??= { xp: 0, level: 1, skillPoints: 0, skills: [] };
+  const before = s.progression.level;
+  s.progression.xp += amount;
+  const after = levelFromXp(s.progression.xp);
+  if (after > before) {
+    s.progression.level = after;
+    s.progression.skillPoints += 1;
+    s.flags.leveledUp = true;
+    s.flags.newLevel = after;
+  }
+  if (reason) s.flags.lastXp = { amount, reason };
+}
+
+// ============================================================
+// EVIDENCE
+// ============================================================
+const LATENCY = {
+  kyc_provision: 6, application_stack: 3, bustout: 1, bustout_extra: 2,
+  shell_formation: 9, mixer_run: 4, wire: 5,
+};
+function record(s, kind, subjectId, { weight = 1, meta = {} } = {}) {
+  const latency = LATENCY[kind] ?? 5;
+  s.evidence.push({
+    id: uid('ev'), day: s.day,
+    revealOn: s.day + latency + Math.floor(rng() * 3),
+    kind, subject: subjectId, weight,
+    fidelity: +(0.55 + rng() * 0.45).toFixed(2),
+    redacted: rng() < 0.18, meta,
+  });
+}
+const visibleEvidence = s => s.evidence.filter(e => e.revealOn <= s.day);
+
+// ============================================================
+// ACTIONS
+// ============================================================
+const FIRST = ['Dana','Owen','Priya','Kai','Ruth','Elias','Nadia','Marcus','Sora','Ivan'];
+const LAST  = ['Whitfield','Castellanos','Raman','Ito','Beaumont','Okafor','Lindqvist','Vance','Petrov','Adeyemi'];
+const rname = () => FIRST[Math.floor(rng()*FIRST.length)] + ' ' + LAST[Math.floor(rng()*LAST.length)];
+
+const ATTACKER_ACTIONS = {
+  buy_fullz: {
+    label: 'Acquire Fullz', cost: 350, ap: 1, icon: 'user-plus',
+    desc: 'Dark-web identity kit. Seeds a new synthetic persona.',
+    run(s) {
+      if (s.capital < 350) return { error: 'Insufficient funds.' };
+      s.capital -= 350;
+      s.paranoia = clamp(s.paranoia + (hasSkill(s,'a1') ? 4 : 5));
+      s.readiness = clamp(s.readiness + 12);
+      const id = uid('persona');
+      s.entities.persona.push({ id, name: rname(), label: rname() });
+      record(s, 'kyc_provision', id, { weight: 1 });
+      grantXp(s, 20, 'Acquire Fullz');
+      return 'Fullz acquired. New persona seeded.';
+    },
+  },
+  stack_apps: {
+    label: 'Stack Applications', cost: 0, ap: 1, icon: 'layers',
+    desc: 'Submit multiple neobank apps in <90s. Exploits reporting lag.',
+    run(s) {
+      if (s.readiness < 25) return { error: 'Not ready — buy Fullz first.' };
+      const bonus = hasSkill(s, 'a2') ? 8 : 0;
+      s.readiness = clamp(s.readiness + 18 + bonus);
+      s.paranoia = clamp(s.paranoia + (hasSkill(s,'a1') ? 6 : 8));
+      const id = s.entities.persona.at(-1)?.id;
+      if (id) record(s, 'application_stack', id, { weight: 2 });
+      grantXp(s, 25, 'Application Stacking');
+      return 'Applications stacked across 4 neobanks.';
+    },
+  },
+  lay_low: {
+    label: 'Lay Low', cost: 0, ap: 1, icon: 'moon',
+    desc: 'Go dark for 24h. Reduce OpSec paranoia by 18.',
+    run(s) {
+      s.paranoia = clamp(s.paranoia - 18);
+      return 'Went dark. Paranoia reduced.';
+    },
+  },
+  bustout: {
+    label: 'EXECUTE BUST-OUT', cost: 0, ap: 2, variant: 'danger', icon: 'zap',
+    desc: 'Cash out all maxed limits. Terminal, loud, lucrative.',
+    run(s) {
+      if (s.readiness < 70) return { error: 'Readiness below 70%. Age accounts first.' };
+      s.capital += 12500;
+      s.readiness = 0;
+      s.paranoia = clamp(s.paranoia + 35);
+      const id = s.entities.persona[0]?.id;
+      if (id) {
+        record(s, 'bustout', id, { weight: 4 });
+        if (!hasSkill(s, 'a3')) record(s, 'bustout_extra', id, { weight: 2 });
+      }
+      grantXp(s, 150, 'Bust-Out');
+      return { ok: true, climax: true, msg: '$12,500 extracted. The clock is now against you.' };
+    },
+  },
+};
+
+const DEFENDER_ACTIONS = {
+  review: {
+    label: 'Case Review', cost: 0, ap: 1, icon: 'search', isPage: '/review',
+    desc: 'Triage 5 live alerts. Classify fraud vs. clean.',
+  },
+  triage: {
+    label: 'Triage Alert Queue', cost: 0, ap: 1, icon: 'filter',
+    desc: 'Clear false positives. Reduce fatigue, gain case strength.',
+    run(s) {
+      const gain = 3 + Math.floor(rng() * 4);
+      s.case.strength = clamp(s.case.strength + gain);
+      s.fatigue = clamp(s.fatigue - 10);
+      grantXp(s, 15, 'Triage');
+      return `Triaged 300 alerts. Case strength +${gain}.`;
+    },
+  },
+  subpoena: {
+    label: 'Issue 314(b) Order', cost: 200, ap: 1, icon: 'file-badge',
+    desc: 'Request cross-institution telemetry from partner banks.',
+    run(s) {
+      if (s.capital < 200) return { error: 'Insufficient budget.' };
+      s.capital -= 200;
+      const bonus = hasSkill(s, 'd3') ? 1.3 : 1;
+      const gain = Math.round((8 + Math.floor(rng() * 8)) * bonus);
+      s.case.strength = clamp(s.case.strength + gain);
+      grantXp(s, 30, '314(b)');
+      return `314(b) served. Case strength +${gain}.`;
+    },
+  },
+  attach_evidence: {
+    label: 'Attach Evidence', cost: 0, ap: 1, icon: 'paperclip',
+    desc: 'Attach the strongest clean evidence item to the case file.',
+    run(s) {
+      const avail = s.evidence.filter(e =>
+        e.revealOn <= s.day && !s.case.resolved?.includes(e.id) && !e.redacted);
+      if (!avail.length) return { error: 'No clean evidence available yet.' };
+      avail.sort((a, b) => b.weight * b.fidelity - a.weight * a.fidelity);
+      const pick = avail[0];
+      s.case.resolved ??= [];
+      s.case.resolved.push(pick.id);
+      const bonus = hasSkill(s, 'd1') ? 1.2 : 1;
+      const gain = Math.round(pick.weight * 4 * pick.fidelity * bonus);
+      s.case.strength = clamp(s.case.strength + gain);
+      grantXp(s, 25, 'Evidence Attach');
+      return `Attached ${pick.kind.replace(/_/g, ' ')}. Case strength +${gain}.`;
+    },
+  },
+  raid: {
+    label: 'EXECUTE WARRANT', cost: 0, ap: 2, variant: 'danger', icon: 'gavel',
+    desc: 'Requires strong case. Terminal, decisive.',
+    run(s) {
+      const threshold = hasSkill(s, 'd4') ? 80 : 90;
+      if (s.case.strength < threshold) return { error: `Case strength below ${threshold}%. Keep building.` };
+      s.case.strength = 100;
+      s.phase = 'closed';
+      s.outcome = 'win';
+      grantXp(s, 300, 'Warrant');
+      return { ok: true, climax: true, msg: 'Federal raid executed. Syndicate dismantled.' };
+    },
+  },
+};
+
+const getActions = role => role === 'attacker' ? ATTACKER_ACTIONS : DEFENDER_ACTIONS;
+
+// ============================================================
+// ENGINE
+// ============================================================
+function log(s, msg) {
+  const t = new Date().toLocaleTimeString();
+  s.logs.unshift(`[${t}] ${msg}`);
+  if (s.logs.length > 300) s.logs.length = 300;
+}
+function simulateOpponent(s) {
+  if (s.role === 'defender') {
+    const a = s.attackerSim;
+    if (!a.active) return;
+    if (rng() < 0.35 && a.capital >= 350) {
+      a.capital -= 350;
+      a.readiness = clamp(a.readiness + 12);
+      const id = 'sim_p_' + Math.floor(rng() * 1e8).toString(36);
+      s.entities.persona.push({ id, name: rname(), label: rname(), sim: true });
+      record(s, 'kyc_provision', id, { weight: 1 });
+    }
+    if (rng() < 0.4 && a.readiness > 20) {
+      a.readiness = clamp(a.readiness + 15);
+      const id = s.entities.persona.at(-1)?.id;
+      if (id) record(s, 'application_stack', id, { weight: 2 });
+    }
+    if (a.readiness > 70 && rng() < 0.25) {
+      a.readiness = 0;
+      a.capital += 12500;
+      const id = s.entities.persona[0]?.id;
+      if (id) record(s, 'bustout', id, { weight: 4 });
+      log(s, 'Attribution: a neobank reports a coordinated credit bust-out.');
+    }
+  } else {
+    if (rng() < 0.3) s.fatigue = clamp(s.fatigue + 6);
+  }
+}
+function advanceDay() {
+  if (state.phase === 'closed') return;
+  dispatch(s => {
+    s.day += 1;
+    s.ap = s.maxAp;
+    s.paranoia = clamp(s.paranoia + (s.flags.aggressive ? 2 : -1));
+    s.fatigue = clamp(s.fatigue + 1);
+    simulateOpponent(s);
+    if (s.role === 'attacker') {
+      if (rng() * 100 < s.paranoia / 3) {
+        s.case.strength = clamp(s.case.strength + 6);
+        log(s, '[ALERT] A linked institution filed a SAR on your cluster.');
+      }
+    }
+    if (s.role === 'defender') {
+      const stale = s.evidence.filter(e => e.revealOn <= s.day && s.day - e.revealOn > 10).length;
+      s.case.strength = clamp(s.case.strength - Math.floor(stale / 3));
+    }
+    if (s.role === 'attacker' && (s.paranoia >= 100 || s.case.strength >= 100)) {
+      s.phase = 'closed'; s.outcome = 'lose';
+      log(s, '[BUST] Federal task force executed a coordinated freeze. Run over.');
+    }
+    if (s.role === 'defender' && s.case.strength >= 100) {
+      s.phase = 'closed'; s.outcome = 'win';
+      log(s, '[WIN] Case strength maxed. Syndicate dismantled.');
+    }
+    if (s.day > 30) {
+      s.phase = 'closed';
+      if (s.role === 'attacker') s.outcome = s.capital >= 50000 ? 'win' : 'lose';
+      else s.outcome = s.case.strength >= 90 ? 'win' : 'lose';
+      log(s, `[END] 30-day window closed. Outcome: ${s.outcome?.toUpperCase()}.`);
+    }
+  });
+}
+
+// ============================================================
+// UI HELPERS
+// ============================================================
+function haptic(p = 10) { try { navigator.vibrate?.(p); } catch {} }
+function icons() { if (window.lucide) window.lucide.createIcons(); }
+
+function toast(msg, ms = 1800) {
+  const el = document.createElement('div');
+  el.className = 'toast-anim fixed left-1/2 -translate-x-1/2 z-40 bg-cyberdark border border-cyberborder rounded-lg px-4 py-2 font-mono text-xs text-white shadow-xl';
+  el.style.bottom = 'calc(80px + env(safe-area-inset-bottom))';
+  el.textContent = msg;
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), ms);
+}
+
+function sheet({ title, body = '', actions = [], dismissible = true }) {
+  return new Promise(resolve => {
+    const backdrop = document.createElement('div');
+    backdrop.className = 'sheet-backdrop fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-end';
+    backdrop.innerHTML = `
+      <div class="sheet w-full bg-cybercard rounded-t-2xl border-t border-cyberborder p-4"
+           style="padding-bottom: max(1rem, env(safe-area-inset-bottom))">
+        <div class="w-10 h-1 bg-slate-600 rounded mx-auto mb-3"></div>
+        <h3 class="font-mono text-sm font-bold text-white mb-2">${title}</h3>
+        ${body ? `<p class="text-xs text-slate-300 leading-relaxed mb-4">${body}</p>` : ''}
+        <div class="flex gap-2">
+          ${actions.map(a => `
+            <button data-id="${a.id}" class="flex-1 min-h-[48px] rounded-lg font-mono text-xs font-bold
+              ${a.variant === 'danger' ? 'bg-cyberred/20 text-cyberred border border-cyberred/40'
+                : a.variant === 'ghost' ? 'bg-cyberdark text-slate-300 border border-cyberborder'
+                : 'bg-cyberblue text-black'}">${a.label}</button>`).join('')}
+        </div>
+      </div>`;
+    const close = id => { backdrop.remove(); resolve(id); };
+    backdrop.querySelectorAll('button[data-id]').forEach(b =>
+      b.addEventListener('click', () => { haptic(12); close(b.dataset.id); }));
+    if (dismissible) backdrop.addEventListener('click', e => { if (e.target === backdrop) close(null); });
+    document.body.appendChild(backdrop);
+    haptic(6);
+  });
+}
+
+function showLevelUp(level) {
+  haptic([60, 40, 60, 40, 120]);
+  const overlay = document.createElement('div');
+  overlay.className = 'fixed inset-0 z-[80] flex items-center justify-center bg-black/85 backdrop-blur';
+  overlay.innerHTML = `
+    <div class="text-center space-y-4 p-6">
+      <div class="w-24 h-24 rounded-3xl bg-gradient-to-br from-cyberblue to-cyberpurple mx-auto flex items-center justify-center shadow-2xl">
+        <div class="font-mono font-bold text-3xl text-black">${level}</div>
+      </div>
+      <div>
+        <div class="font-mono text-[11px] tracking-widest text-cyberblue mb-1">LEVEL UP</div>
+        <div class="font-mono text-xl font-bold text-white">Skill point earned</div>
+        <div class="text-xs text-slate-400 mt-2 max-w-xs mx-auto">Visit the SKILL tab to unlock a new capability.</div>
+      </div>
+      <button class="px-8 py-3 bg-cyberblue text-black rounded-xl font-mono font-bold text-sm">CONTINUE</button>
+    </div>`;
+  overlay.querySelector('button').addEventListener('click', () => overlay.remove());
+  document.body.appendChild(overlay);
+  setTimeout(() => overlay.remove(), 6000);
+}
+
+// ============================================================
+// ROUTER
+// ============================================================
+const routes = {};
+let currentUnmount = null;
+let renderGen = 0;
+const register = (path, page) => { routes[path] = page; };
+const currentPath = () => (location.hash.slice(1) || '/ops').split('?')[0];
+
+function navigate(path) {
+  if (location.hash === '#' + path) { render(); return; }
+  location.hash = '#' + path;
+}
+
+async function render() {
+  const gen = ++renderGen;
+  const path = currentPath();
+  const page = routes[path] || routes['/ops'];
+  const outlet = document.getElementById('outlet');
+  if (!outlet || !page) return;
+  if (currentUnmount) { try { currentUnmount(); } catch {} currentUnmount = null; }
+  outlet.innerHTML = '';
+  outlet.scrollTop = 0;
+  if (page.mount) {
+    const maybeUnmount = await page.mount(outlet);
+    if (gen !== renderGen) return;
+    if (typeof maybeUnmount === 'function') currentUnmount = maybeUnmount;
+  }
+  if (gen !== renderGen) return;
+  icons();
+  renderNav();
+}
+
+// ============================================================
+// SHELL
+// ============================================================
+function renderTopbar() {
+  const atk = state.role === 'attacker';
+  const el = document.getElementById('topbar');
+  if (!el) return;
+  el.innerHTML = `
+    <div class="flex items-center gap-2">
+      <div class="w-7 h-7 rounded-lg bg-gradient-to-br from-cyberblue to-cyberpurple flex items-center justify-center">
+        <i data-lucide="${atk ? 'terminal' : 'shield-check'}" class="w-4 h-4 text-black"></i>
+      </div>
+      <div>
+        <div class="font-mono font-bold text-xs tracking-wider text-white leading-none">CYBERSHIFT</div>
+        <div class="font-mono text-[10px] ${atk ? 'text-cyberblue' : 'text-cyberpurple'} leading-none mt-0.5">
+          ${atk ? 'RED TEAM' : 'FBI CYBER'}
+        </div>
+      </div>
+    </div>
+    <div class="text-right">
+      <div class="font-mono text-[10px] text-slate-500 leading-none">DAY</div>
+      <div class="font-mono font-bold text-sm text-white leading-none mt-0.5">
+        ${state.day}<span class="text-slate-500 text-xs">/30</span>
+      </div>
+    </div>`;
+}
+
+function renderStats() {
+  const atk = state.role === 'attacker';
+  const v2 = atk ? `${state.paranoia}%` : `${state.case.strength}%`;
+  const l2 = atk ? 'PARANOIA' : 'CASE';
+  const c2 = atk
+    ? (state.paranoia > 50 ? 'text-cyberred' : 'text-cyberblue')
+    : (state.case.strength > 70 ? 'text-cybergreen' : 'text-cyberamber');
+  const el = document.getElementById('stats');
+  if (!el) return;
+  el.innerHTML = `
+    <div><div class="text-[9px] font-mono text-slate-500">${atk ? 'CAPITAL' : 'BUDGET'}</div>
+         <div class="font-mono font-bold text-sm text-cybergreen">$${state.capital.toLocaleString()}</div></div>
+    <div><div class="text-[9px] font-mono text-slate-500">${l2}</div>
+         <div class="font-mono font-bold text-sm ${c2}">${v2}</div></div>
+    <div><div class="text-[9px] font-mono text-slate-500">AP</div>
+         <div class="font-mono font-bold text-sm text-white">${state.ap}/${state.maxAp}</div></div>`;
+}
+
+const TABS = {
+  attacker: [
+    { path: '/ops',     icon: 'zap',          label: 'OPS'   },
+    { path: '/forge',   icon: 'user-plus',    label: 'FORGE' },
+    { path: '/launder', icon: 'globe',        label: 'WASH'  },
+    { path: '/network', icon: 'git-branch',   label: 'NET'   },
+    { path: '/skills',  icon: 'brain',        label: 'SKILL' },
+  ],
+  defender: [
+    { path: '/ops',      icon: 'layout-dashboard', label: 'OPS'    },
+    { path: '/review',   icon: 'search',           label: 'REVIEW' },
+    { path: '/evidence', icon: 'file-search',      label: 'EVID'   },
+    { path: '/case',     icon: 'gavel',            label: 'CASE'   },
+    { path: '/skills',   icon: 'brain',            label: 'SKILL'  },
+  ],
+};
+
+function renderNav() {
+  const tabs = TABS[state.role] || TABS.attacker;
+  const here = currentPath();
+  const el = document.getElementById('bottomnav');
+  if (!el) return;
+  el.innerHTML = tabs.map(t => `
+    <button data-path="${t.path}" class="${here === t.path ? 'active' : ''}">
+      <i data-lucide="${t.icon}" class="w-5 h-5"></i>
+      <span>${t.label}</span>
+    </button>`).join('');
+  el.querySelectorAll('button').forEach(btn =>
+    btn.addEventListener('click', () => { haptic(8); navigate(btn.dataset.path); }));
+}
+
+function renderShell() { renderTopbar(); renderStats(); renderNav(); }
+
+// ============================================================
+// ROLE GATE
+// ============================================================
+function renderRoleGate() {
+  const app = document.getElementById('app');
+  app.innerHTML = `
+    <div class="fixed inset-0 z-[100] bg-cyberdark flex items-center justify-center p-4">
+      <div class="max-w-md w-full space-y-6">
+        <div class="text-center space-y-2">
+          <div class="w-16 h-16 rounded-2xl bg-gradient-to-br from-cyberblue to-cyberpurple mx-auto flex items-center justify-center shadow-2xl">
+            <i data-lucide="shield-alert" class="w-8 h-8 text-black"></i>
+          </div>
+          <h1 class="font-mono text-xl font-bold text-white">CYBERSHIFT</h1>
+          <p class="text-xs text-slate-400">Fraud simulation training · two sides</p>
+        </div>
+        <div class="space-y-3">
+          <button data-role="attacker" class="tap-card">
+            <div class="w-10 h-10 rounded-lg bg-cyberblue/15 flex items-center justify-center shrink-0">
+              <i data-lucide="terminal" class="w-5 h-5 text-cyberblue"></i>
+            </div>
+            <div class="flex-1">
+              <div class="font-mono text-sm font-bold text-cyberblue">RED TEAM — Attacker</div>
+              <div class="text-[11px] text-slate-400 mt-0.5">Learn the fraudster mindset: fullz → stack → bust-out</div>
+            </div>
+          </button>
+          <button data-role="defender" class="tap-card">
+            <div class="w-10 h-10 rounded-lg bg-cyberpurple/15 flex items-center justify-center shrink-0">
+              <i data-lucide="shield-check" class="w-5 h-5 text-cyberpurple"></i>
+            </div>
+            <div class="flex-1">
+              <div class="font-mono text-sm font-bold text-cyberpurple">BLUE TEAM — FBI Analyst</div>
+              <div class="text-[11px] text-slate-400 mt-0.5">Learn the investigator playbook: review → subpoena → warrant</div>
+            </div>
+          </button>
+        </div>
+        <div class="text-[10px] font-mono text-center text-slate-600 leading-relaxed">
+          Educational simulation · abstractions of real detection patterns<br>
+          Train the mindset, not the operational detail
+        </div>
+      </div>
+    </div>`;
+  app.querySelectorAll('button[data-role]').forEach(btn =>
+    btn.addEventListener('click', () => {
+      haptic(15);
+      reset(btn.dataset.role);
+      state.role = btn.dataset.role;
+      notify();
+      boot();
+    }));
+  icons();
+}
+
+// ============================================================
+// PAGE: BRIEFING
+// ============================================================
+const HANDLERS = {
+  attacker: {
+    codename: 'MIRAGE',
+    lines: [
+      ['ENCRYPTED CHANNEL', "Day 1. The bureau's reporting lag is fourteen days. That's your window."],
+      ['ENCRYPTED CHANNEL', 'Seed synthetic identities. Age them. Stack applications across multiple banks before the first hard inquiry lands.'],
+      ['ENCRYPTED CHANNEL', 'Extract the maximum and disappear. Do NOT let paranoia cross 100. That is when the task force finds you.'],
+      ['MISSION', 'Extract $20,000. Avoid federal indictment. Master the timing.'],
+    ],
+  },
+  defender: {
+    codename: 'ANVIL',
+    lines: [
+      ['FBI CYBER DIVISION', 'Day 1. A cluster of neobanks is reporting anomalous account stacking. The pattern is too clean to be organic.'],
+      ['FBI CYBER DIVISION', 'Your tools are subpoenas, SARs, and the 314(b) cross-institution pipeline. Slow, but they work.'],
+      ['FBI CYBER DIVISION', 'Review alerts for velocity anomalies, device reuse, KYC gaps. Attach the strongest clean evidence.'],
+      ['MISSION', 'Reach 90% case strength and execute the federal warrant.'],
+    ],
+  },
+};
+
+function typeLine(container, label, text) {
+  return new Promise(resolve => {
+    const line = document.createElement('div');
+    line.className = 'mb-3';
+    line.innerHTML = `<div class="font-mono text-[10px] text-cyberblue tracking-widest mb-1">${label}</div>
+                      <div class="text-sm text-slate-200 leading-relaxed"></div>`;
+    container.appendChild(line);
+    const target = line.querySelector('div:last-child');
+    let i = 0;
+    const timer = setInterval(() => {
+      target.textContent += text[i++] || '';
+      if (i >= text.length) { clearInterval(timer); resolve(); }
+    }, 14);
+  });
+}
+
+const briefingPage = {
+  async mount(root) {
+    const h = HANDLERS[state.role];
+    root.innerHTML = `
+      <div class="p-6 min-h-[80vh] flex flex-col justify-center max-w-md mx-auto">
+        <div class="text-center mb-8">
+          <div class="w-16 h-16 rounded-2xl bg-gradient-to-br from-cyberblue to-cyberpurple mx-auto flex items-center justify-center mb-3">
+            <i data-lucide="radio" class="w-8 h-8 text-black"></i>
+          </div>
+          <div class="font-mono text-[10px] text-slate-500 tracking-widest">HANDLER · ${h.codename}</div>
+          <div class="font-mono text-sm text-white mt-1">Incoming transmission</div>
+        </div>
+        <div id="story" class="space-y-3 mb-8 min-h-[280px]"></div>
+        <button id="begin" class="hidden w-full py-4 bg-cyberblue text-black rounded-xl font-mono font-bold text-sm">
+          BEGIN OPERATION →
+        </button>
+      </div>`;
+    const storyEl = root.querySelector('#story');
+    for (const [label, text] of h.lines) await typeLine(storyEl, label, text);
+    const btn = root.querySelector('#begin');
+    btn.classList.remove('hidden');
+    btn.addEventListener('click', () => {
+      haptic(20);
+      state.flags.briefed = true;
+      notify();
+      navigate('/ops');
+    });
+    icons();
+  },
+};
+
+// ============================================================
+// PAGE: OPS
+// ============================================================
+const opsPage = {
+  async mount(root) {
+    if (state.phase === 'closed') { navigate('/debrief'); return; }
+    const actions = getActions(state.role);
+    root.innerHTML = `
+      <div class="p-4 space-y-3">
+        <div class="flex justify-between items-center px-1 mb-1">
+          <h2 class="font-mono text-xs uppercase tracking-wider text-slate-400">
+            ${state.role === 'attacker' ? 'TACTICAL OPS' : 'INVESTIGATION DESK'}
+          </h2>
+          <div class="font-mono text-[10px] text-slate-500">LVL ${state.progression.level}</div>
+        </div>
+        ${Object.entries(actions).map(([id, a]) => `
+          <button data-id="${id}" class="tap-card ${a.variant === 'danger' ? 'border-cyberred/40' : ''}">
+            <div class="w-10 h-10 rounded-lg ${a.variant === 'danger' ? 'bg-cyberred/15' : 'bg-cyberblue/15'} flex items-center justify-center shrink-0">
+              <i data-lucide="${a.icon}" class="w-5 h-5 ${a.variant === 'danger' ? 'text-cyberred' : 'text-cyberblue'}"></i>
+            </div>
+            <div class="flex-1">
+              <div class="font-mono text-sm font-bold ${a.variant === 'danger' ? 'text-cyberred' : 'text-white'}">${a.label}</div>
+              <div class="text-[11px] text-slate-400 mt-0.5 leading-snug">${a.desc}</div>
+              <div class="text-[10px] font-mono text-slate-500 mt-1">
+                ${a.cost ? `$${a.cost} · ` : ''}${a.ap || 0} AP
+              </div>
+            </div>
+            <i data-lucide="chevron-right" class="w-4 h-4 text-slate-600 shrink-0"></i>
+          </button>`).join('')}
+        <button id="end-day" class="w-full mt-4 py-4 rounded-xl font-mono font-bold text-sm transition
+          ${state.ap === 0 ? 'bg-cyberblue text-black' : 'bg-cybercard text-slate-300 border border-cyberborder'}">
+          ${state.ap === 0 ? 'END DAY →' : `END DAY (${state.ap} AP left)`}
+        </button>
+      </div>`;
+    root.querySelectorAll('button[data-id]').forEach(btn =>
+      btn.addEventListener('click', async () => {
+        const id = btn.dataset.id;
+        const a = actions[id];
+        if (a.isPage) { navigate(a.isPage); return; }
+        if (a.variant === 'danger') {
+          const ok = await sheet({
+            title: 'Confirm ' + a.label,
+            body: a.desc,
+            actions: [
+              { id: 'no', label: 'Cancel', variant: 'ghost' },
+              { id: 'yes', label: 'CONFIRM', variant: 'danger' },
+            ],
+          });
+          if (ok !== 'yes') return;
+        }
+        executeAction(id);
+      }));
+    root.querySelector('#end-day').addEventListener('click', async () => {
+      if (state.ap > 0) {
+        const ok = await sheet({
+          title: 'End day early?',
+          body: `${state.ap} action point${state.ap > 1 ? 's' : ''} unused will be lost.`,
+          actions: [
+            { id: 'no', label: 'Stay', variant: 'ghost' },
+            { id: 'yes', label: 'End Day', variant: 'danger' },
+          ],
+        });
+        if (ok !== 'yes') return;
+      }
+      advanceDay();
+      if (state.phase === 'closed') { navigate('/debrief'); return; }
+      opsPage.mount(root);
+    });
+    icons();
+  },
+};
+
+function executeAction(id) {
+  const action = getActions(state.role)[id];
+  if (!action || !action.run) return;
+  if (state.ap < action.ap) { toast('No actions left. End the day.'); haptic([30, 50, 30]); return; }
+  if ((action.cost || 0) > state.capital) { toast('Insufficient funds.'); haptic([30, 50, 30]); return; }
+  const result = dispatch(s => { s.ap -= action.ap || 0; return action.run(s); });
+  if (result?.error) { toast(result.error); haptic([30, 50, 30]); return; }
+  const outlet = document.getElementById('outlet');
+  if (result?.climax) {
+    haptic([100, 50, 100, 50, 200]);
+    document.body.classList.add('screen-shake', 'red-flash');
+    setTimeout(() => {
+      document.body.classList.remove('screen-shake', 'red-flash');
+      toast(result.msg, 2600);
+      if (state.phase === 'closed') navigate('/debrief');
+      else if (outlet) opsPage.mount(outlet);
+    }, 400);
+  } else {
+    haptic(15);
+    toast(typeof result === 'string' ? result : 'Done.');
+    if (outlet) opsPage.mount(outlet);
+  }
+}
+
+// ============================================================
+// PAGE: FORGE
+// ============================================================
+const forgePage = {
+  async mount(root) {
+    const cost = 300;
+    const personas = state.entities.persona;
+    root.innerHTML = `
+      <div class="p-4 space-y-4">
+        <div class="bg-cybercard border border-cyberborder rounded-xl p-4">
+          <h2 class="font-mono text-xs uppercase tracking-wider text-slate-400 mb-3">Synthetic Persona Pool</h2>
+          ${personas.length === 0
+            ? `<div class="text-xs text-slate-500 italic py-4 text-center">No personas yet. Provision one below.</div>`
+            : personas.map(p => `
+              <div class="bg-cyberdark border border-cyberborder rounded-lg p-3 mb-2 flex justify-between items-center">
+                <div>
+                  <div class="font-mono text-sm font-bold text-white">${p.name}</div>
+                  <div class="text-[10px] font-mono text-slate-500 mt-0.5">ID: ${p.id}</div>
+                </div>
+                <span class="px-2 py-0.5 rounded text-[10px] font-mono ${p.sim ? 'bg-cyberpurple/10 text-cyberpurple' : 'bg-cyberblue/10 text-cyberblue'}">
+                  ${p.sim ? 'RIVAL' : 'SEEDED'}
+                </span>
+              </div>`).join('')}
+        </div>
+        <button id="provision" class="tap-card justify-center bg-cyberblue text-black border-cyberblue">
+          <i data-lucide="plus-circle" class="w-5 h-5"></i>
+          <span class="font-mono text-sm font-bold">Provision Persona ($${cost})</span>
+        </button>
+      </div>`;
+    root.querySelector('#provision').addEventListener('click', () => {
+      if (state.capital < cost) { toast('Insufficient funds.'); haptic([30, 50, 30]); return; }
+      dispatch(s => {
+        s.capital -= cost;
+        const id = uid('persona');
+        s.entities.persona.push({ id, name: rname(), label: rname() });
+        record(s, 'kyc_provision', id, { weight: 1 });
+        grantXp(s, 20, 'Provision');
+      });
+      haptic(20);
+      toast('Persona seeded.');
+      forgePage.mount(root);
+    });
+    icons();
+  },
+};
+
+// ============================================================
+// PAGE: LAUNDER
+// ============================================================
+const launderPage = {
+  async mount(root) {
+    const isAtk = state.role === 'attacker';
+    root.innerHTML = `
+      <div class="p-4 space-y-3">
+        <h2 class="font-mono text-xs uppercase tracking-wider text-slate-400 px-1">
+          ${isAtk ? 'OFFSHORE SHELL HUB' : 'SUBPOENA & SEIZURE DESK'}
+        </h2>
+        ${isAtk ? `
+          <button data-act="shell" class="tap-card">
+            <div class="w-10 h-10 rounded-lg bg-cyberpurple/15 flex items-center justify-center shrink-0">
+              <i data-lucide="building-2" class="w-5 h-5 text-cyberpurple"></i>
+            </div>
+            <div class="flex-1">
+              <div class="font-mono text-sm font-bold text-white">Form Wyoming LLC</div>
+              <div class="text-[11px] text-slate-400 mt-0.5">Cost: ${hasSkill(state, 'a4') ? '$800' : '$1,200'} · Paranoia -15</div>
+            </div>
+          </button>
+          <button data-act="mixer" class="tap-card">
+            <div class="w-10 h-10 rounded-lg bg-cybergreen/15 flex items-center justify-center shrink-0">
+              <i data-lucide="repeat" class="w-5 h-5 text-cybergreen"></i>
+            </div>
+            <div class="flex-1">
+              <div class="font-mono text-sm font-bold text-white">Run Crypto Mixer</div>
+              <div class="text-[11px] text-slate-400 mt-0.5">4% fee · Paranoia -${hasSkill(state, 'a5') ? '30' : '20'}</div>
+            </div>
+          </button>
+          <button data-act="wire" class="tap-card">
+            <div class="w-10 h-10 rounded-lg bg-cyberblue/15 flex items-center justify-center shrink-0">
+              <i data-lucide="arrow-right-left" class="w-5 h-5 text-cyberblue"></i>
+            </div>
+            <div class="flex-1">
+              <div class="font-mono text-sm font-bold text-white">Route Wire Transfer</div>
+              <div class="text-[11px] text-slate-400 mt-0.5">Move $2,500 through a shell account</div>
+            </div>
+          </button>
+        ` : `
+          <button data-act="subpoena_shell" class="tap-card">
+            <div class="w-10 h-10 rounded-lg bg-cyberblue/15 flex items-center justify-center shrink-0">
+              <i data-lucide="file-badge" class="w-5 h-5 text-cyberblue"></i>
+            </div>
+            <div class="flex-1">
+              <div class="font-mono text-sm font-bold text-white">Subpoena Registrar</div>
+              <div class="text-[11px] text-slate-400 mt-0.5">MLAT to unmask owners · $400 · +10 case</div>
+            </div>
+          </button>
+          <button data-act="freeze" class="tap-card">
+            <div class="w-10 h-10 rounded-lg bg-cyberred/15 flex items-center justify-center shrink-0">
+              <i data-lucide="lock" class="w-5 h-5 text-cyberred"></i>
+            </div>
+            <div class="flex-1">
+              <div class="font-mono text-sm font-bold text-cyberred">Emergency Freeze</div>
+              <div class="text-[11px] text-slate-400 mt-0.5">Freeze all linked accounts · +5 case</div>
+            </div>
+          </button>
+        `}
+      </div>`;
+    const handlers = {
+      shell: () => {
+        const cost = hasSkill(state, 'a4') ? 800 : 1200;
+        if (state.capital < cost) { toast(`Need $${cost}.`); return; }
+        dispatch(s => {
+          s.capital -= cost;
+          const id = 'shell_' + Math.floor(rng() * 1e8).toString(36);
+          s.entities.shell.push({ id, name: 'Wyoming LLC #' + (s.entities.shell.length + 1) });
+          s.paranoia = clamp(s.paranoia - 15);
+          record(s, 'shell_formation', id, { weight: 3 });
+        });
+        toast('Shell formed.'); haptic(15); launderPage.mount(root);
+      },
+      mixer: () => {
+        if (state.capital < 500) { toast('Too little capital.'); return; }
+        dispatch(s => {
+          const fee = Math.round(s.capital * 0.04);
+          s.capital -= fee;
+          s.paranoia = clamp(s.paranoia - (hasSkill(s, 'a5') ? 30 : 20));
+          record(s, 'mixer_run', 'mixer', { weight: 3 });
+        });
+        toast('Funds mixed.'); haptic(15); launderPage.mount(root);
+      },
+      wire: () => {
+        if (state.capital < 2500) { toast('Need $2,500.'); return; }
+        dispatch(s => {
+          s.capital -= 2500;
+          const shell = s.entities.shell.at(-1);
+          if (shell) {
+            const id = 'wallet_' + Math.floor(rng() * 1e8).toString(36);
+            s.entities.wallet.push({ id, name: 'Wallet ' + id.slice(-4) });
+            s.links.push({ from: shell.id, to: id, type: 'wire', strength: 2 });
+          }
+          record(s, 'wire', 'wire', { weight: 2 });
+        });
+        toast('$2,500 routed.'); haptic(15); launderPage.mount(root);
+      },
+      subpoena_shell: () => {
+        if (state.capital < 400) { toast('Need $400.'); return; }
+        dispatch(s => { s.capital -= 400; s.case.strength = clamp(s.case.strength + 10); });
+        toast('Registrar subpoenaed.'); haptic(15); launderPage.mount(root);
+      },
+      freeze: () => {
+        dispatch(s => { s.case.strength = clamp(s.case.strength + 5); });
+        toast('Accounts frozen.'); haptic([20, 40, 20]); launderPage.mount(root);
+      },
+    };
+    root.querySelectorAll('button[data-act]').forEach(btn =>
+      btn.addEventListener('click', () => handlers[btn.dataset.act]?.()));
+    icons();
+  },
+};
+
+// ============================================================
+// PAGE: NETWORK
+// ============================================================
+let netRaf = null, netRo = null;
+const networkPage = {
+  async mount(root) {
+    root.innerHTML = `
+      <div class="p-4 space-y-3">
+        <div class="bg-cybercard border border-cyberborder rounded-xl p-4">
+          <h2 class="font-mono text-xs uppercase tracking-wider text-slate-400 mb-3">Entity Graph</h2>
+          <canvas id="graph" class="w-full bg-cyberdark rounded-lg" style="height: 380px;"></canvas>
+          <div class="mt-2 text-[10px] font-mono text-slate-500 flex flex-wrap gap-x-3 gap-y-1">
+            <span class="text-cyberblue">● Persona</span>
+            <span class="text-cybergreen">● Account</span>
+            <span class="text-cyberpurple">● Shell</span>
+            <span class="text-cyberred">● Wallet</span>
+          </div>
+        </div>
+      </div>`;
+    const canvas = root.querySelector('#graph');
+    const ctx = canvas.getContext('2d');
+    let w = 0, h = 0, dpr = 1;
+    const resize = () => {
+      const r = canvas.getBoundingClientRect();
+      dpr = window.devicePixelRatio || 1;
+      w = r.width; h = r.height;
+      canvas.width = Math.round(w * dpr);
+      canvas.height = Math.round(h * dpr);
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    };
+    resize();
+    netRo = new ResizeObserver(resize);
+    netRo.observe(canvas);
+    const nodes = buildNodes();
+    nodes.forEach((n, i) => {
+      const a = (i / Math.max(nodes.length, 1)) * Math.PI * 2;
+      n.x = w / 2 + Math.cos(a) * Math.min(w, h) * 0.32;
+      n.y = h / 2 + Math.sin(a) * Math.min(w, h) * 0.32;
+    });
+    const draw = () => {
+      ctx.clearRect(0, 0, w, h);
+      for (const l of state.links) {
+        const a = nodes.find(n => n.id === l.from);
+        const b = nodes.find(n => n.id === l.to);
+        if (!a || !b) continue;
+        ctx.strokeStyle = l.type === 'wire' ? 'rgba(168,85,247,.5)' : 'rgba(56,189,248,.3)';
+        ctx.lineWidth = 1.2;
+        ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+      }
+      for (const n of nodes) {
+        ctx.fillStyle = n.color;
+        ctx.beginPath(); ctx.arc(n.x, n.y, n.r, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#cbd5e1';
+        ctx.font = '10px "JetBrains Mono", monospace';
+        ctx.fillText(n.label.slice(0, 16), n.x + n.r + 4, n.y + 3);
+      }
+      netRaf = requestAnimationFrame(draw);
+    };
+    draw();
+    icons();
+    return () => { cancelAnimationFrame(netRaf); netRo?.disconnect(); };
+  },
+};
+
+function buildNodes() {
+  const C = { persona: '#38bdf8', account: '#10b981', shell: '#a855f7', wallet: '#f43f5e' };
+  const out = [];
+  for (const kind of Object.keys(state.entities)) {
+    for (const e of state.entities[kind]) {
+      out.push({
+        id: e.id, kind,
+        label: e.name ?? e.label ?? e.id,
+        color: C[kind], r: kind === 'persona' ? 7 : 5,
+      });
+    }
+  }
+  return out;
+}
+
+// ============================================================
+// PAGE: EVIDENCE
+// ============================================================
+const evidencePage = {
+  async mount(root) {
+    const items = visibleEvidence(state).sort((a, b) => b.day - a.day);
+    const forensics = hasSkill(state, 'd5');
+    root.innerHTML = `
+      <div class="p-4 space-y-3">
+        <div class="flex items-center justify-between mb-1 px-1">
+          <h2 class="font-mono text-xs uppercase tracking-wider text-slate-400">Evidence Ledger</h2>
+          <span class="text-[10px] font-mono text-slate-500">${items.length} revealed</span>
+        </div>
+        ${items.length === 0
+          ? `<div class="bg-cybercard border border-cyberborder rounded-xl p-6 text-center text-xs text-slate-500 italic">
+               No evidence yet. Latency hides items 3–9 days.
+             </div>`
+          : items.map(e => {
+              const redacted = e.redacted && !forensics;
+              return `
+                <div class="bg-cybercard border border-cyberborder rounded-xl p-3 ${redacted ? 'opacity-60' : ''}">
+                  <div class="flex justify-between items-center mb-1">
+                    <span class="font-mono text-xs font-bold ${redacted ? 'text-slate-500' : 'text-white'}">
+                      ${e.kind.replace(/_/g, ' ').toUpperCase()}
+                    </span>
+                    <span class="text-[10px] font-mono ${redacted ? 'text-cyberred' : 'text-cybergreen'}">
+                      ${redacted ? 'REDACTED' : `FID ${Math.round(e.fidelity * 100)}%`}
+                    </span>
+                  </div>
+                  <div class="text-[11px] text-slate-400 font-mono">
+                    Subject: ${e.subject} · Surfaced day ${e.revealOn}
+                  </div>
+                  <div class="text-[10px] text-slate-600 font-mono mt-1">
+                    Originated day ${e.day} · Weight ${e.weight}
+                  </div>
+                </div>`;
+            }).join('')}
+      </div>`;
+    icons();
+  },
+};
+
+// ============================================================
+// PAGE: CASE
+// ============================================================
+const casePage = {
+  async mount(root) {
+    const vis = visibleEvidence(state).filter(e => !e.redacted || hasSkill(state, 'd5'));
+    const attached = state.case.resolved?.length || 0;
+    const threshold = hasSkill(state, 'd4') ? 80 : 90;
+    root.innerHTML = `
+      <div class="p-4 space-y-4">
+        <div class="bg-cybercard border border-cyberborder rounded-xl p-4">
+          <h2 class="font-mono text-xs uppercase tracking-wider text-slate-400 mb-3">Federal Case File</h2>
+          <div class="space-y-2">
+            <div class="flex justify-between text-xs font-mono">
+              <span class="text-slate-400">Case Strength</span>
+              <span class="text-white font-bold">${state.case.strength}%</span>
+            </div>
+            <div class="w-full h-2 bg-cyberdark rounded-full overflow-hidden border border-cyberborder">
+              <div class="h-full bg-gradient-to-r from-cyberblue to-cyberpurple transition-all"
+                   style="width: ${state.case.strength}%"></div>
+            </div>
+            <div class="grid grid-cols-3 gap-2 mt-3">
+              <div class="bg-cyberdark rounded-lg p-2">
+                <div class="text-[9px] font-mono text-slate-500">ATTACHED</div>
+                <div class="text-sm font-mono font-bold text-white">${attached}</div>
+              </div>
+              <div class="bg-cyberdark rounded-lg p-2">
+                <div class="text-[9px] font-mono text-slate-500">AVAILABLE</div>
+                <div class="text-sm font-mono font-bold text-white">${vis.length}</div>
+              </div>
+              <div class="bg-cyberdark rounded-lg p-2">
+                <div class="text-[9px] font-mono text-slate-500">WARRANT</div>
+                <div class="text-sm font-mono font-bold ${state.case.strength >= threshold ? 'text-cybergreen' : 'text-slate-500'}">
+                  ${state.case.strength >= threshold ? 'READY' : threshold + '%'}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="bg-cybercard border border-cyberborder rounded-xl p-4">
+          <h3 class="font-mono text-xs uppercase tracking-wider text-slate-400 mb-2">Attached Evidence</h3>
+          ${attached === 0
+            ? `<div class="text-xs text-slate-500 italic">Nothing attached. Use "Attach Evidence" from Ops.</div>`
+            : state.case.resolved.map(id => {
+                const e = state.evidence.find(x => x.id === id);
+                return e ? `<div class="text-[11px] font-mono text-slate-300 py-1 border-b border-cyberborder/40">
+                  ✓ ${e.kind.replace(/_/g, ' ')} (w${e.weight})</div>` : '';
+              }).join('')}
+        </div>
+      </div>`;
+    icons();
+  },
+};
+
+// ============================================================
+// PAGE: CASE REVIEW (minigame)
+// ============================================================
+const SIGNALS = [
+  { key: 'accountAgeDays',   label: 'Account age',           fmt: v => `${v}d` },
+  { key: 'velocity24h',      label: '24h velocity',          fmt: v => `${v} tx` },
+  { key: 'geoMatch',         label: 'Geo consistency',       fmt: v => v ? 'MATCH' : 'MISMATCH' },
+  { key: 'deviceReuse',      label: 'Device fingerprint',    fmt: v => v ? 'SHARED' : 'UNIQUE' },
+  { key: 'kycDepth',         label: 'KYC depth',             fmt: v => v ? 'FULL' : 'MINIMAL' },
+  { key: 'incomeMatch',      label: 'Income vs. limit',      fmt: v => v ? 'PLAUSIBLE' : 'OUTLIER' },
+  { key: 'priorDisputes',    label: 'Prior disputes',        fmt: v => `${v}` },
+  { key: 'ipReputation',     label: 'IP reputation',         fmt: v => v < 20 ? 'CLEAN' : 'FLAGGED' },
+  { key: 'behavioralScore',  label: 'Behavioral biometrics', fmt: v => `${v}/100` },
+  { key: 'mulePattern',      label: 'Mule routing',          fmt: v => v ? 'DETECTED' : 'NONE' },
+];
+
+function genAlert(isFraud) {
+  return {
+    id: 'alr_' + Math.floor(rng() * 1e9).toString(36),
+    accountAgeDays: isFraud ? 1 + Math.floor(rng() * 30) : 180 + Math.floor(rng() * 600),
+    velocity24h: isFraud ? 4 + Math.floor(rng() * 6) : 1 + Math.floor(rng() * 2),
+    geoMatch: isFraud ? rng() < 0.5 : rng() < 0.95,
+    deviceReuse: isFraud ? rng() < 0.7 : rng() < 0.1,
+    kycDepth: isFraud ? rng() < 0.4 : rng() < 0.9,
+    incomeMatch: isFraud ? rng() < 0.4 : rng() < 0.9,
+    priorDisputes: isFraud ? 2 + Math.floor(rng() * 4) : Math.floor(rng() * 2),
+    ipReputation: isFraud ? 30 + Math.floor(rng() * 50) : Math.floor(rng() * 25),
+    behavioralScore: isFraud ? 10 + Math.floor(rng() * 40) : 60 + Math.floor(rng() * 40),
+    mulePattern: isFraud ? rng() < 0.6 : rng() < 0.05,
+    isFraud,
+  };
+}
+
+function genQueue(count = 5) {
+  const q = [];
+  const fraudCount = 2 + Math.floor(rng() * 2);
+  for (let i = 0; i < count; i++) q.push(genAlert(i < fraudCount));
+  for (let i = q.length - 1; i > 0; i--) {
+    const j = Math.floor(rng() * (i + 1));
+    [q[i], q[j]] = [q[j], q[i]];
+  }
+  return q;
+}
+
+const reviewPage = {
+  async mount(root) {
+    if (state.ap < 1) {
+      root.innerHTML = `<div class="p-6 text-center text-slate-400 text-sm">No action points left. End the day to continue.</div>`;
+      return;
+    }
+    const queue = genQueue(5);
+    const hidden = hasSkill(state, 'd2') ? null : SIGNALS[Math.floor(rng() * SIGNALS.length)].key;
+    let idx = 0, correct = 0, cleaned = false;
+
+    const renderAlert = () => {
+      if (idx >= queue.length) { finish(); return; }
+      const a = queue[idx];
+      const visible = SIGNALS.filter(s => s.key !== hidden);
+      root.innerHTML = `
+        <div class="p-4 space-y-3">
+          <div class="flex justify-between items-center px-1 mb-2">
+            <div class="font-mono text-[10px] text-slate-500 tracking-widest">ALERT ${idx + 1} / ${queue.length}</div>
+            <div class="font-mono text-[10px] text-slate-500">SCORE ${correct}</div>
+          </div>
+          <div class="bg-cybercard border border-cyberborder rounded-xl p-4">
+            <div class="font-mono text-[10px] text-cyberblue mb-1">ALERT ID</div>
+            <div class="font-mono text-sm text-white mb-4">${a.id}</div>
+            <div class="space-y-2">
+              ${visible.map(s => `
+                <div class="flex justify-between text-xs font-mono py-1.5 border-b border-cyberborder/40">
+                  <span class="text-slate-400">${s.label}</span>
+                  <span class="text-white">${s.fmt(a[s.key])}</span>
+                </div>`).join('')}
+            </div>
+          </div>
+          <div class="grid grid-cols-2 gap-2">
+            <button data-d="clear" class="tap-card justify-center">
+              <i data-lucide="check" class="w-4 h-4 text-cybergreen"></i>
+              <span class="font-mono text-xs font-bold text-cybergreen">CLEAR</span>
+            </button>
+            <button data-d="flag" class="tap-card justify-center border-cyberred/40">
+              <i data-lucide="flag" class="w-4 h-4 text-cyberred"></i>
+              <span class="font-mono text-xs font-bold text-cyberred">FLAG</span>
+            </button>
+          </div>
+          <div class="text-[10px] font-mono text-slate-600 text-center px-1 leading-snug">
+            Red flags in combination: recent account + high velocity + shared device + minimal KYC = fraud signature.
+          </div>
+        </div>`;
+      root.querySelectorAll('button[data-d]').forEach(btn =>
+        btn.addEventListener('click', () => {
+          const guess = btn.dataset.d === 'flag';
+          const right = guess === a.isFraud;
+          if (right) { correct++; haptic(10); } else { haptic([30, 50, 30]); }
+          idx++;
+          renderAlert();
+        }));
+      icons();
+    };
+
+    const finish = () => {
+      const pct = Math.round((correct / queue.length) * 100);
+      const xp = Math.round(correct * 15 + (pct === 100 ? 40 : 0));
+      const caseGain = Math.floor(correct * 1.5);
+      if (!cleaned) {
+        dispatch(s => {
+          grantXp(s, xp, 'Case review');
+          s.ap -= 1;
+          s.case.strength = clamp(s.case.strength + caseGain);
+        });
+        cleaned = true;
+      }
+      root.innerHTML = `
+        <div class="p-6 min-h-[70vh] flex flex-col justify-center items-center text-center space-y-5">
+          <div class="w-16 h-16 rounded-2xl ${pct >= 80 ? 'bg-cybergreen/15' : 'bg-cyberblue/15'} flex items-center justify-center">
+            <i data-lucide="${pct === 100 ? 'trophy' : 'target'}" class="w-8 h-8 ${pct >= 80 ? 'text-cybergreen' : 'text-cyberblue'}"></i>
+          </div>
+          <div>
+            <div class="font-mono text-2xl font-bold text-white">${correct} / ${queue.length}</div>
+            <div class="font-mono text-xs text-slate-400 mt-1">${pct}% ACCURACY</div>
+          </div>
+          <div class="text-xs text-slate-400 max-w-xs leading-relaxed">
+            ${pct >= 80
+              ? 'Strong analyst instincts. Move to subpoena.'
+              : 'Recalibrate. Study the combinations that flag as fraud — you will see the same patterns on the job.'}
+          </div>
+          <div class="bg-cybercard border border-cyberborder rounded-lg px-4 py-2 font-mono text-xs text-cybergreen">
+            +${xp} XP · Case strength +${caseGain}
+          </div>
+          <button id="exit" class="w-full max-w-xs py-3 bg-cyberblue text-black rounded-xl font-mono font-bold text-sm">
+            RETURN TO OPS
+          </button>
+        </div>`;
+      root.querySelector('#exit').addEventListener('click', () => navigate('/ops'));
+      icons();
+    };
+
+    renderAlert();
+  },
+};
+
+// ============================================================
+// PAGE: SKILLS
+// ============================================================
+const skillsPage = {
+  async mount(root) {
+    const list = SKILLS[state.role];
+    const p = state.progression;
+    const nextXp = xpToNext(p.xp);
+    root.innerHTML = `
+      <div class="p-4 space-y-3">
+        <div class="bg-cybercard border border-cyberborder rounded-xl p-4">
+          <div class="flex justify-between items-baseline mb-2">
+            <div>
+              <div class="font-mono text-[10px] text-slate-500 tracking-widest">LEVEL</div>
+              <div class="font-mono text-2xl font-bold text-white">${p.level}</div>
+            </div>
+            <div class="text-right">
+              <div class="font-mono text-[10px] text-slate-500">SKILL PTS</div>
+              <div class="font-mono text-lg font-bold text-cyberpurple">${p.skillPoints}</div>
+            </div>
+          </div>
+          <div class="w-full h-1.5 bg-cyberdark rounded-full overflow-hidden">
+            <div class="h-full bg-gradient-to-r from-cyberblue to-cyberpurple"
+                 style="width: ${Math.min(100, (p.xp / nextXp) * 100)}%"></div>
+          </div>
+          <div class="text-[10px] font-mono text-slate-500 mt-1 text-right">${p.xp} / ${nextXp} XP</div>
+        </div>
+        ${list.map(s => {
+          const owned = hasSkill(state, s.id);
+          const locked = s.requires.some(r => !hasSkill(state, r));
+          const affordable = p.skillPoints >= s.cost;
+          return `
+            <div class="bg-cybercard border ${owned ? 'border-cybergreen/40' : 'border-cyberborder'} rounded-xl p-4">
+              <div class="flex justify-between items-start mb-1">
+                <div class="font-mono text-sm font-bold ${owned ? 'text-cybergreen' : locked ? 'text-slate-500' : 'text-white'}">${s.name}</div>
+                <div class="text-[10px] font-mono ${owned ? 'text-cybergreen' : 'text-cyberpurple'}">
+                  ${owned ? '✓ ACTIVE' : `${s.cost} SP`}
+                </div>
+              </div>
+              <div class="text-[11px] text-slate-400 mb-3">${s.desc}</div>
+              ${locked
+                ? `<div class="text-[10px] font-mono text-slate-600">Locked · requires ${s.requires.join(', ')}</div>`
+                : owned ? ''
+                : `<button data-unlock="${s.id}" ${!affordable ? 'disabled' : ''}
+                    class="w-full py-2 rounded-lg font-mono text-xs font-bold
+                      ${affordable
+                        ? 'bg-cyberpurple/20 text-cyberpurple border border-cyberpurple/40'
+                        : 'bg-cyberdark text-slate-600 border border-cyberborder'}">UNLOCK</button>`}
+            </div>`;
+        }).join('')}
+        <button id="reset-all" class="w-full mt-4 py-3 bg-cyberdark border border-cyberborder rounded-lg font-mono text-xs text-slate-500">
+          RESET ALL PROGRESS
+        </button>
+      </div>`;
+    icons();
+    root.querySelectorAll('button[data-unlock]').forEach(btn =>
+      btn.addEventListener('click', () => {
+        const id = btn.dataset.unlock;
+        const skill = list.find(s => s.id === id);
+        if (p.skillPoints < skill.cost) { toast('Not enough skill points.'); return; }
+        if (skill.requires.some(r => !hasSkill(state, r))) { toast('Prerequisite locked.'); return; }
+        dispatch(s => { s.progression.skillPoints -= skill.cost; s.progression.skills.push(id); });
+        haptic(20); toast('Skill unlocked.');
+        skillsPage.mount(root);
+      }));
+    root.querySelector('#reset-all').addEventListener('click', async () => {
+      const ok = await sheet({
+        title: 'Reset everything?',
+        body: 'Erases all progress and returns to role selection.',
+        actions: [
+          { id: 'no', label: 'Cancel', variant: 'ghost' },
+          { id: 'yes', label: 'Reset', variant: 'danger' },
+        ],
+      });
+      if (ok === 'yes') { try { localStorage.removeItem(KEY); } catch {} location.reload(); }
+    });
+  },
+};
+
+// ============================================================
+// PAGE: DEBRIEF
+// ============================================================
+const debriefPage = {
+  async mount(root) {
+    if (state.phase !== 'closed') { navigate('/ops'); return; }
+    const win = state.outcome === 'win';
+    const atk = state.role === 'attacker';
+    const maxDay = Math.min(state.day, 30);
+    const rows = [];
+    for (let d = 1; d <= maxDay; d++) {
+      const attActs = state.evidence.filter(e => e.day === d).map(e => e.kind);
+      const defSees = state.evidence.filter(e => e.revealOn === d).map(e => e.kind);
+      if (!attActs.length && !defSees.length) continue;
+      rows.push({ d, attActs, defSees });
+    }
+    if (!state.flags.debriefed) {
+      dispatch(s => { grantXp(s, win ? 500 : 120, 'Debrief'); s.flags.debriefed = true; });
+    }
+    root.innerHTML = `
+      <div class="p-4 space-y-4">
+        <div class="text-center py-6">
+          <div class="font-mono text-[10px] tracking-widest text-slate-500 mb-2">AFTER-ACTION REPORT</div>
+          <div class="font-mono text-2xl font-bold ${win ? 'text-cybergreen' : 'text-cyberred'} mb-2">
+            ${win ? 'MISSION SUCCESS' : 'MISSION FAILED'}
+          </div>
+          <div class="text-xs text-slate-400 max-w-xs mx-auto leading-relaxed">
+            ${atk
+              ? (win ? `You extracted $${state.capital.toLocaleString()} before the task force closed in.`
+                     : `The task force indicted your cluster on day ${state.day}. All accounts frozen.`)
+              : (win ? `Case strength maxed. The syndicate is dismantled and assets seized.`
+                     : `The 30-day window closed with only ${state.case.strength}% case strength. Syndicate walked.`)}
+          </div>
+        </div>
+        <div class="bg-cybercard border border-cyberborder rounded-xl p-4">
+          <div class="font-mono text-[10px] tracking-widest text-slate-500 mb-2">DUAL-PERSPECTIVE TIMELINE</div>
+          <div class="text-[11px] text-slate-400 mb-4 leading-relaxed">
+            Left: what the ${atk ? 'attacker' : 'syndicate'} did. Right: when the ${atk ? 'defender' : 'task force'} could actually see it.
+            The gap is the window that was exploited — or closed.
+          </div>
+          ${rows.length === 0
+            ? `<div class="text-xs text-slate-500 italic text-center py-4">No recorded events.</div>`
+            : `<div class="space-y-1 max-h-80 overflow-y-auto pr-1">
+                ${rows.map(r => `
+                  <div class="grid grid-cols-[36px_1fr_1fr] gap-2 py-1.5 border-b border-cyberborder/40 text-[10px] font-mono">
+                    <div class="text-slate-500">D${r.d}</div>
+                    <div class="space-y-0.5">
+                      ${r.attActs.length ? r.attActs.map(a => `<div class="text-cyberred">▸ ${fmtKind(a)}</div>`).join('') : '<div class="text-slate-700">—</div>'}
+                    </div>
+                    <div class="space-y-0.5">
+                      ${r.defSees.length ? r.defSees.map(a => `<div class="text-cyberblue">◂ ${fmtKind(a)}</div>`).join('') : '<div class="text-slate-700">—</div>'}
+                    </div>
+                  </div>`).join('')}
+              </div>`}
+        </div>
+        <div class="bg-cybercard border border-cyberborder rounded-xl p-4">
+          <div class="font-mono text-[10px] tracking-widest text-slate-500 mb-2">WHAT TO TAKE AWAY</div>
+          <div class="text-xs text-slate-300 leading-relaxed space-y-2">
+            ${win
+              ? `<p>The signal that mattered was <strong class="text-cyberblue">velocity stacking</strong> — multiple applications in a short window from a shared device fingerprint. In a live analyst desk that pattern is catchable in under 6 hours. You got out because reporting latency was longer than your operational cadence.</p>
+                 <p>Try the run again with the same seed. Your timing pattern is your fingerprint.</p>`
+              : `<p>The other side won by <strong class="text-cybergreen">pattern combination</strong> — three linked artifacts in the same 48-hour window. In real cases, three linked signals within 72 hours is enough for a SAR escalation.</p>
+                 <p>Retry with a slower tempo. Use Lay Low after high-paranoia moves.</p>`}
+          </div>
+        </div>
+        <div class="grid grid-cols-2 gap-2">
+          <button id="retry" class="py-3 bg-cybercard border border-cyberborder rounded-lg font-mono font-bold text-xs text-white">SAME SEED</button>
+          <button id="new" class="py-3 bg-cyberblue text-black rounded-lg font-mono font-bold text-xs">NEW RUN</button>
+        </div>
+      </div>`;
+    icons();
+    root.querySelector('#retry').addEventListener('click', () => {
+      const seed = state.seeded?.seed ?? '';
+      restartRun(seed && seed !== 'auto' ? seed : null);
+    });
+    root.querySelector('#new').addEventListener('click', () => restartRun(null));
+  },
+};
+
+function fmtKind(k) { return k.replace(/_/g, ' ').toUpperCase(); }
+
+function restartRun(seed) {
+  const role = state.role;
+  const progression = state.progression;
+  const fresh = defaults();
+  fresh.role = role;
+  fresh.progression = progression;
+  fresh.seeded = { seed: seed ?? 'auto' };
+  Object.keys(state).forEach(k => delete state[k]);
+  Object.assign(state, fresh);
+  if (seed) setSeed(isNaN(+seed) ? seedFromString(seed) : +seed);
+  else setSeed(randomSeed());
+  notify();
+  navigate('/briefing');
+}
+
+// ============================================================
+// BOOT
+// ============================================================
+function boot() {
+  const app = document.getElementById('app');
+  app.innerHTML = `
+    <div id="shell" class="app-shell">
+      <header id="topbar" class="app-topbar safe-top"></header>
+      <div id="stats" class="app-stats"></div>
+      <main id="outlet" class="page-scroll"></main>
+      <nav id="bottomnav" class="app-bottomnav safe-bottom"></nav>
+    </div>`;
+  register('/briefing', briefingPage);
+  register('/ops', opsPage);
+  register('/forge', forgePage);
+  register('/launder', launderPage);
+  register('/network', networkPage);
+  register('/evidence', evidencePage);
+  register('/case', casePage);
+  register('/review', reviewPage);
+  register('/skills', skillsPage);
+  register('/debrief', debriefPage);
+  renderShell();
+  const params = new URLSearchParams(location.search);
+  const seedParam = params.get('seed');
+  if (seedParam) setSeed(isNaN(+seedParam) ? seedFromString(seedParam) : +seedParam);
+  else setSeed(randomSeed());
+  if (!state.seeded) state.seeded = { seed: seedParam ?? 'auto' };
+  const startPath = state.flags.briefed ? '/ops' : '/briefing';
+  if (!location.hash) {
+    history.replaceState(null, '', '#' + startPath);
+  }
+  render();
+  subscribe(() => {
+    renderShell();
+    if (state.flags.leveledUp) {
+      showLevelUp(state.flags.newLevel);
+      state.flags.leveledUp = false;
+    }
+  });
+}
+
+// ============================================================
+// START
+// ============================================================
+window.addEventListener('hashchange', render);
+if (!state.role) renderRoleGate();
+else boot();
+
+})();
+</script>
+</body>
+</html>
