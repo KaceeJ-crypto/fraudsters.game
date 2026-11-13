@@ -105,20 +105,19 @@ const STAGES = [
   { id: 11, title: '11. Field Espionage & Target Ops', icon: 'eye', options: { target: ['Rival Tech Syndicate', 'Offshore Banking Director', 'Defense Contractor Node'], vector: ['Physical Infiltration & Credentials', 'Social Engineering Espionage', 'Blackmail / Credential Extraction'] } }
 ];
 
-const KEY = 'cybershift:master_v2';
+const KEY = 'cybershift:master_v3';
 let state = {
-  v: 2, authenticated: false, role: null, phase: 'auth',
+  v: 3, authenticated: false, role: null, phase: 'auth',
   difficulty: 'MEDIUM', currentStageIndex: 0,
   capital: 25000, heat: 5, caseStrength: 25,
-  breakoutState: {}, logs: ['[SYS] Master CyberShift Simulation Engine Initialized with Video Training Modules.'],
+  breakoutState: {}, logs: ['[SYS] Master CyberShift Engine Ready.'],
   selectedForgeDoc: 'Passport & Driver License', forgeOutput: null,
   decryptedCount: 0,
   decryptionLogs: [
     { id: 'LOG-8801', raw: 'ENC_7a8f9b::PROXY_NODE_192.168.1.45::TLS_SIG_MATCH', decrypted: false, val: 'TLS Client Hello fingerprint collision detected on residential proxy subnet.' },
     { id: 'LOG-8802', raw: 'ENC_3c2d1e::VELOCITY_API_EXCEEDED::NEO_CLUSTER', decrypted: false, val: 'Cross-platform API velocity anomaly flagged by real-time consortium nodes.' },
     { id: 'LOG-8803', raw: 'ENC_9f8e7d::GRAPH_CIRCULAR_ACH::DEPOSIT_SWAP', decrypted: false, val: 'Circular ACH transaction graph asymmetry identified across neobank cluster.' }
-  ],
-  progression: { xp: 0, level: 1, skillPoints: 1, skills: [] }
+  ]
 };
 
 try {
@@ -141,33 +140,45 @@ function toast(msg) {
 
 const clamp = (v, lo = 0, hi = 100) => Math.min(hi, Math.max(lo, v));
 
-// ============================================================
-// ROUTING
-// ============================================================
 const routes = {};
 const register = (path, page) => { routes[path] = page; };
 const currentPath = () => (location.hash.slice(1) || '/ops').split('?')[0];
 
 function navigate(path) {
-  if (location.hash === '#' + path) { render(); return; }
   location.hash = '#' + path;
+  render();
 }
 
 async function render() {
-  if (!state.authenticated || !state.role) { renderAuthAndRole(); return; }
-  if (state.phase === 'briefing') { renderBriefing(); return; }
+  const app = document.getElementById('app');
+
+  if (!state.authenticated || !state.role) { 
+    renderAuthAndRole(app); 
+    return; 
+  }
+  if (state.phase === 'briefing') { 
+    renderBriefing(app); 
+    return; 
+  }
+
+  app.innerHTML = `
+    <div id="shell" class="app-shell">
+      <header id="topbar" class="app-topbar safe-top"></header>
+      <div id="stats" class="app-stats"></div>
+      <main id="outlet" class="page-scroll"></main>
+      <nav id="bottomnav" class="app-bottomnav safe-bottom"></nav>
+    </div>`;
+
+  renderShell();
 
   const path = currentPath();
   const page = routes[path] || routes['/ops'];
   const outlet = document.getElementById('outlet');
-  if (!outlet || !page) return;
-
-  outlet.innerHTML = '';
-  outlet.scrollTop = 0;
-  if (page.mount) await page.mount(outlet);
+  if (outlet && page && page.mount) {
+    await page.mount(outlet);
+  }
 
   icons();
-  renderShell();
 }
 
 function renderTopbar() {
@@ -222,11 +233,7 @@ function renderNav() {
 
 function renderShell() { renderTopbar(); renderStats(); renderNav(); }
 
-// ============================================================
-// SCREENS: AUTH & BRIEFING
-// ============================================================
-function renderAuthAndRole() {
-  const app = document.getElementById('app');
+function renderAuthAndRole(app) {
   app.innerHTML = `
     <div class="fixed inset-0 z-50 bg-cyberdark flex items-center justify-center p-4 overflow-y-auto">
       <div class="max-w-md w-full bg-cybercard border border-cyberborder rounded-2xl p-6 space-y-4 text-center my-auto">
@@ -239,14 +246,14 @@ function renderAuthAndRole() {
         <input type="password" id="passcode" placeholder="Lab Passcode (CYBER2026)" class="w-full bg-cyberdark border border-cyberborder rounded-lg p-2 text-center text-sm font-mono text-white">
         
         <div class="space-y-2 pt-2">
-          <button onclick="window.initRole('attacker')" class="tap-card border-cyberred/40">
+          <button id="btn-attacker" class="tap-card border-cyberred/40">
             <i data-lucide="terminal" class="w-5 h-5 text-cyberred"></i>
             <div>
               <div class="font-mono text-xs font-bold text-cyberred">Play Rob U. (Attacker Mindset)</div>
               <div class="text-[10px] text-slate-400">Master identity assembly, neobank application stacking & bust-out mechanics.</div>
             </div>
           </button>
-          <button onclick="window.initRole('defender')" class="tap-card border-cybergreen/40">
+          <button id="btn-defender" class="tap-card border-cybergreen/40">
             <i data-lucide="shield-check" class="w-5 h-5 text-cybergreen"></i>
             <div>
               <div class="font-mono text-xs font-bold text-cybergreen">Play Craig Bluebird (Cyber Officer)</div>
@@ -257,10 +264,12 @@ function renderAuthAndRole() {
       </div>
     </div>`;
   icons();
+
+  document.getElementById('btn-attacker')?.addEventListener('click', () => window.initRole('attacker'));
+  document.getElementById('btn-defender')?.addEventListener('click', () => window.initRole('defender'));
 }
 
-function renderBriefing() {
-  const app = document.getElementById('app');
+function renderBriefing(app) {
   const isAtk = state.role === 'attacker';
   app.innerHTML = `
     <div class="fixed inset-0 z-50 bg-cyberdark flex items-center justify-center p-4 overflow-y-auto">
@@ -276,23 +285,14 @@ function renderBriefing() {
           `}
         </div>
 
-        <div class="space-y-1">
-          <div class="text-[10px] font-mono text-slate-400 uppercase">Operational Training Briefing Video:</div>
-          <div class="w-full bg-slate-900 border border-cyberborder rounded-lg overflow-hidden p-2 text-center">
-            <iframe class="w-full h-48 rounded" src="https://www.youtube-nocookie.com/embed/videoseries?list=PLDzeHZWIZsTo0wSBdqtT4z739ZzR5qj8j" title="Cybersecurity Training" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
-            <span class="text-[10px] font-mono text-slate-500 mt-1 block">The video above demonstrates real-world incident response and SOC workflows.</span>
-          </div>
-        </div>
-
-        <button onclick="window.startSim()" class="w-full py-3 bg-cyberblue text-black font-mono font-bold text-xs rounded-xl">ENTER SIMULATION →</button>
+        <button id="btn-start" class="w-full py-3 bg-cyberblue text-black font-mono font-bold text-xs rounded-xl">ENTER SIMULATION →</button>
       </div>
     </div>`;
   icons();
+
+  document.getElementById('btn-start')?.addEventListener('click', () => window.startSim());
 }
 
-// ============================================================
-// PAGES: OPS, FORGE, VIDEO TRAINING, GAME, EXPORT
-// ============================================================
 const opsPage = {
   async mount(root) {
     const stage = STAGES[state.currentStageIndex] || STAGES[10];
@@ -456,13 +456,6 @@ const videoTrainingPage = {
             <iframe class="w-full h-48 rounded" src="https://www.youtube-nocookie.com/embed/videoseries?list=PLDzeHZWIZsTo0wSBdqtT4z739ZzR5qj8j" title="Incident Response" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
           </div>
         </div>
-
-        <div class="bg-cybercard border border-cyberborder rounded-xl p-3 space-y-2">
-          <div class="text-white font-bold">Module 2: Threat Intelligence & Forensic Analysis</div>
-          <div class="w-full bg-slate-900 border border-cyberborder rounded-lg overflow-hidden p-2 text-center">
-            <iframe class="w-full h-48 rounded" src="https://www.youtube-nocookie.com/embed/videoseries?list=PLDzeHZWIZsPLt3qM6Xf13X7Y2cK1Y3n6Z" title="Threat Intelligence" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
-          </div>
-        </div>
       </div>`;
     icons();
   }
@@ -508,18 +501,20 @@ const exportPage = {
   }
 };
 
-// ============================================================
-// GLOBAL ACTIONS & BOOT
-// ============================================================
 window.initRole = (role) => {
-  const code = document.getElementById('passcode').value.trim();
+  const code = document.getElementById('passcode')?.value.trim();
   if (code !== LAB_PASSCODE) { toast('Invalid Lab Passcode'); return; }
-  state.role = role; state.phase = 'briefing';
+  state.role = role; 
+  state.authenticated = true;
+  state.phase = 'briefing';
   notify();
 };
 
-window.startSim = () => { state.phase = 'active'; notify(); navigate('/ops'); };
-window.setTab = (path) => navigate(path);
+window.startSim = () => { 
+  state.phase = 'active'; 
+  notify(); 
+  navigate('/ops'); 
+};
 
 window.decryptLog = (id) => {
   const item = state.decryptionLogs.find(l => l.id === id);
@@ -549,21 +544,8 @@ register('/video', videoTrainingPage);
 register('/game', gamePage);
 register('/export', exportPage);
 
-function boot() {
-  const app = document.getElementById('app');
-  app.innerHTML = `
-    <div id="shell" class="app-shell">
-      <header id="topbar" class="app-topbar safe-top"></header>
-      <div id="stats" class="app-stats"></div>
-      <main id="outlet" class="page-scroll"></main>
-      <nav id="bottomnav" class="app-bottomnav safe-bottom"></nav>
-    </div>`;
-  if (!location.hash) history.replaceState(null, '', '#/ops');
-  render();
-}
-
 window.addEventListener('hashchange', render);
-boot();
+render();
 
 })();
 </script>
