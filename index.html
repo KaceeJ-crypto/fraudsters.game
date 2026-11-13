@@ -6,7 +6,7 @@
 <meta name="theme-color" content="#0a0f1d">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<title>CyberShift — Dual-Perspective Cyber Warfare Simulation</title>
+<title>CyberShift — Ultimate Dual-Perspective Cyber Warfare Simulation</title>
 <script src="https://cdn.tailwindcss.com"></script>
 <script>
 tailwind.config = { darkMode: 'class', theme: { extend: {
@@ -66,12 +66,11 @@ button { touch-action: manipulation; }
 .app-bottomnav button {
   display: flex; flex-direction: column; align-items: center; justify-content: center;
   gap: 2px; padding: 8px 4px; min-height: 56px;
-  color: #64748b; font-size: 10px;
+  color: #64748b; font-size: 9px;
   font-family: 'JetBrains Mono', monospace; font-weight: 700; letter-spacing: .05em;
   transition: color 120ms;
 }
 .app-bottomnav button.active { color: #38bdf8; }
-.app-bottomnav button:active { background: rgba(56,189,248,.08); }
 .tap-card {
   display: flex; align-items: center; gap: 12px;
   padding: 14px; border-radius: 12px;
@@ -81,24 +80,6 @@ button { touch-action: manipulation; }
   color: inherit;
 }
 .tap-card:active { transform: scale(.985); border-color: #38bdf8; background: #1a2740; }
-.sheet-backdrop { animation: fade-in 160ms ease-out; }
-.sheet { animation: slide-up 220ms cubic-bezier(.22,1,.36,1); }
-.toast-anim { animation: slide-up 180ms ease-out; }
-.screen-shake { animation: shake 380ms cubic-bezier(.36,.07,.19,.97); }
-.red-flash::after {
-  content: ''; position: fixed; inset: 0; z-index: 60;
-  background: #f43f5e; pointer-events: none;
-  animation: flash 500ms ease-out forwards;
-}
-@keyframes fade-in  { from { opacity: 0 } to { opacity: 1 } }
-@keyframes slide-up { from { transform: translateY(100%) } to { transform: translateY(0) } }
-@keyframes shake {
-  10%, 90% { transform: translate3d(-2px,0,0) }
-  20%, 80% { transform: translate3d(4px,0,0) }
-  30%, 50%, 70% { transform: translate3d(-6px,0,0) }
-  40%, 60% { transform: translate3d(6px,0,0) }
-}
-@keyframes flash { to { opacity: 0 } }
 </style>
 </head>
 <body class="scanline">
@@ -107,9 +88,9 @@ button { touch-action: manipulation; }
 (function () {
 'use strict';
 
-// ============================================================
-// STAGES & MISSIONS DEFINITION
-// ============================================================
+const LAB_PASSCODE = "CYBER2026";
+const NEOBANKS = ["Chime", "Mercury", "Revolut", "Brex", "Qonto", "Wise", "Monzo", "Aline"];
+
 const STAGES = [
   { id: 1, title: '1. Network Pipeline & Anonymity Stack', icon: 'network', options: { type: ['Public Wi-Fi Snipe', 'Encrypted Private Mesh', 'Tor Exit Node Relay'], stack: ['Multi-Hop VPN + Proxychain', 'Shadowsocks + WireGuard', 'P2P Intranet Bridge'], dns: ['Cloudflare (1.1.1.1)', 'Quad9 Encrypted', 'Self-Hosted Unbound DNS'] } },
   { id: 2, title: '2. Operating System & Hardening', icon: 'cpu', options: { os: ['Tails OS (Amnesic Live)', 'Qubes OS (Isolated VMs)', 'Kali Linux / Custom CyberG', 'Debian VPS Node'] } },
@@ -124,79 +105,46 @@ const STAGES = [
   { id: 11, title: '11. Field Espionage & Target Ops', icon: 'eye', options: { target: ['Rival Tech Syndicate', 'Offshore Banking Director', 'Defense Contractor Node'], vector: ['Physical Infiltration & Credentials', 'Social Engineering Espionage', 'Blackmail / Credential Extraction'] } }
 ];
 
-// ============================================================
-// STORE & DEFAULTS
-// ============================================================
-const KEY = 'cybershift:v10';
-const listeners = new Set();
-const LAB_PASSCODE = "CYBER2026";
+const KEY = 'cybershift:master_v2';
+let state = {
+  v: 2, authenticated: false, role: null, phase: 'auth',
+  difficulty: 'MEDIUM', currentStageIndex: 0,
+  capital: 25000, heat: 5, caseStrength: 25,
+  breakoutState: {}, logs: ['[SYS] Master CyberShift Simulation Engine Initialized with Video Training Modules.'],
+  selectedForgeDoc: 'Passport & Driver License', forgeOutput: null,
+  decryptedCount: 0,
+  decryptionLogs: [
+    { id: 'LOG-8801', raw: 'ENC_7a8f9b::PROXY_NODE_192.168.1.45::TLS_SIG_MATCH', decrypted: false, val: 'TLS Client Hello fingerprint collision detected on residential proxy subnet.' },
+    { id: 'LOG-8802', raw: 'ENC_3c2d1e::VELOCITY_API_EXCEEDED::NEO_CLUSTER', decrypted: false, val: 'Cross-platform API velocity anomaly flagged by real-time consortium nodes.' },
+    { id: 'LOG-8803', raw: 'ENC_9f8e7d::GRAPH_CIRCULAR_ACH::DEPOSIT_SWAP', decrypted: false, val: 'Circular ACH transaction graph asymmetry identified across neobank cluster.' }
+  ],
+  progression: { xp: 0, level: 1, skillPoints: 1, skills: [] }
+};
 
-function defaults() {
-  return {
-    v: 10, role: null, day: 1, phase: 'auth', outcome: null,
-    authenticated: false,
-    difficulty: 'MEDIUM', currentStageIndex: 0,
-    capital: 25000, paranoia: 5, caseStrength: 0,
-    ap: 3, maxAp: 3,
-    entities: { persona: [], account: [], shell: [], wallet: [] },
-    breakoutState: {},
-    evidence: [], logs: ['[SYS] Dual-Perspective Simulation Initialized.', '[SYS] Enter Authorized Lab Passcode to begin.'],
-    progression: { xp: 0, level: 1, skillPoints: 1, skills: [] },
-    selectedForgeDoc: 'Passport & Driver License',
-    forgeOutput: null
-  };
-}
-
-let state;
 try {
   const raw = localStorage.getItem(KEY);
-  const parsed = raw ? JSON.parse(raw) : null;
-  state = parsed && parsed.v === 10 ? parsed : defaults();
-} catch { state = defaults(); }
+  if (raw) Object.assign(state, JSON.parse(raw));
+} catch {}
 
-let persistTimer = null;
-function persist() {
-  clearTimeout(persistTimer);
-  persistTimer = setTimeout(() => {
-    try { localStorage.setItem(KEY, JSON.stringify(state)); } catch {}
-  }, 200);
-}
-function subscribe(fn) { listeners.add(fn); return () => listeners.delete(fn); }
-function notify() { persist(); for (const fn of listeners) fn(state); }
-function dispatch(mut) { const r = mut(state); notify(); return r; }
-function selectRole(role) {
-  dispatch(s => {
-    s.role = role;
-    s.authenticated = true;
-    s.phase = 'briefing';
-  });
-}
-function resetSimulation() {
-  const fresh = defaults();
-  Object.keys(state).forEach(k => delete state[k]);
-  Object.assign(state, fresh);
-  notify();
-}
-
-const clamp = (v, lo = 0, hi = 100) => Math.min(hi, Math.max(lo, v));
+function persist() { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch {} }
+function notify() { persist(); render(); }
 function haptic(p = 10) { try { navigator.vibrate?.(p); } catch {} }
 function icons() { if (window.lucide) window.lucide.createIcons(); }
 
-function toast(msg, ms = 1800) {
+function toast(msg) {
   const el = document.createElement('div');
-  el.className = 'toast-anim fixed left-1/2 -translate-x-1/2 z-40 bg-cyberdark border border-cyberborder rounded-lg px-4 py-2 font-mono text-xs text-white shadow-xl';
-  el.style.bottom = 'calc(80px + env(safe-area-inset-bottom))';
+  el.className = 'fixed left-1/2 -translate-x-1/2 bottom-20 z-50 bg-cybercard border border-cyberborder px-4 py-2 rounded-lg text-xs font-mono text-white shadow-xl';
   el.textContent = msg;
   document.body.appendChild(el);
-  setTimeout(() => el.remove(), ms);
+  setTimeout(() => el.remove(), 2000);
 }
 
+const clamp = (v, lo = 0, hi = 100) => Math.min(hi, Math.max(lo, v));
+
 // ============================================================
-// ROUTING & NAVIGATION
+// ROUTING
 // ============================================================
 const routes = {};
-let currentUnmount = null;
-let renderGen = 0;
 const register = (path, page) => { routes[path] = page; };
 const currentPath = () => (location.hash.slice(1) || '/ops').split('?')[0];
 
@@ -206,53 +154,39 @@ function navigate(path) {
 }
 
 async function render() {
-  if (!state.authenticated || !state.role) {
-    renderAuthGate();
-    return;
-  }
-  if (state.phase === 'briefing') {
-    renderBriefing();
-    return;
-  }
-  const gen = ++renderGen;
+  if (!state.authenticated || !state.role) { renderAuthAndRole(); return; }
+  if (state.phase === 'briefing') { renderBriefing(); return; }
+
   const path = currentPath();
   const page = routes[path] || routes['/ops'];
   const outlet = document.getElementById('outlet');
   if (!outlet || !page) return;
-  if (currentUnmount) { try { currentUnmount(); } catch {} currentUnmount = null; }
+
   outlet.innerHTML = '';
   outlet.scrollTop = 0;
-  if (page.mount) {
-    const maybeUnmount = await page.mount(outlet);
-    if (gen !== renderGen) return;
-    if (typeof maybeUnmount === 'function') currentUnmount = maybeUnmount;
-  }
-  if (gen !== renderGen) return;
+  if (page.mount) await page.mount(outlet);
+
   icons();
-  renderNav();
+  renderShell();
 }
 
 function renderTopbar() {
+  const isAtk = state.role === 'attacker';
   const el = document.getElementById('topbar');
   if (!el) return;
-  const isAttacker = state.role === 'attacker';
   el.innerHTML = `
     <div class="flex items-center gap-2">
-      <div class="w-7 h-7 rounded-lg bg-gradient-to-br ${isAttacker ? 'from-cyberred to-cyberpurple' : 'from-cyberblue to-cybergreen'} flex items-center justify-center">
-        <i data-lucide="${isAttacker ? 'terminal' : 'shield-check'}" class="w-4 h-4 text-black"></i>
+      <div class="w-7 h-7 rounded-lg ${isAtk ? 'bg-cyberred/20 text-cyberred' : 'bg-cybergreen/20 text-cybergreen'} flex items-center justify-center">
+        <i data-lucide="${isAtk ? 'terminal' : 'shield-check'}" class="w-4 h-4"></i>
       </div>
       <div>
-        <div class="font-mono font-bold text-xs tracking-wider text-white leading-none">CYBERSHIFT</div>
-        <div class="font-mono text-[10px] ${isAttacker ? 'text-cyberred' : 'text-cyberblue'} leading-none mt-0.5">
-          ${isAttacker ? 'ROB U. (RED TEAM)' : 'CRAIG B. (DEFENDER)'}
-        </div>
+        <div class="font-mono font-bold text-xs text-white">CYBERSHIFT</div>
+        <div class="font-mono text-[9px] ${isAtk ? 'text-cyberred' : 'text-cybergreen'}">${isAtk ? 'ROB U. (ATTACKER)' : 'CRAIG B. (DEFENDER)'}</div>
       </div>
     </div>
     <div class="text-right">
-      <div class="font-mono text-[10px] text-slate-500 leading-none">${isAttacker ? 'PARANOIA HEAT' : 'CASE STRENGTH'}</div>
-      <div class="font-mono font-bold text-sm ${isAttacker ? 'text-cyberred' : 'text-cybergreen'}">
-        ${isAttacker ? state.paranoia + '%' : state.caseStrength + '%'}
-      </div>
+      <div class="font-mono text-[9px] text-slate-500">${isAtk ? 'HEAT' : 'CASE STRENGTH'}</div>
+      <div class="font-mono font-bold text-sm ${isAtk ? 'text-cyberred' : 'text-cybergreen'}">${isAtk ? state.heat + '%' : state.caseStrength + '%'}</div>
     </div>`;
 }
 
@@ -260,35 +194,24 @@ function renderStats() {
   const el = document.getElementById('stats');
   if (!el) return;
   el.innerHTML = `
-    <div><div class="text-[9px] font-mono text-slate-500">RESOURCES</div>
-         <div class="font-mono font-bold text-sm text-cybergreen">$${state.capital.toLocaleString()}</div></div>
-    <div><div class="text-[9px] font-mono text-slate-500">STAGE</div>
-         <div class="font-mono font-bold text-sm text-cyberblue">${state.currentStageIndex + 1}/11</div></div>
-    <div><div class="text-[9px] font-mono text-slate-500">MODE</div>
-         <div class="font-mono font-bold text-sm text-amber-400">${state.difficulty}</div></div>`;
+    <div><div class="text-[9px] font-mono text-slate-500">CAPITAL</div><div class="font-mono font-bold text-xs text-cybergreen">$${state.capital.toLocaleString()}</div></div>
+    <div><div class="text-[9px] font-mono text-slate-500">STAGE</div><div class="font-mono font-bold text-xs text-cyberblue">${state.currentStageIndex + 1}/11</div></div>
+    <div><div class="text-[9px] font-mono text-slate-500">DIFFICULTY</div><div class="font-mono font-bold text-xs text-amber-400">${state.difficulty}</div></div>`;
 }
 
-const NAV_TABS_ATTACKER = [
+const NAV_TABS = [
   { path: '/ops',        icon: 'terminal',     label: 'MISSIONS' },
   { path: '/forge',      icon: 'layers',       label: 'FORGE' },
-  { path: '/whiteboard', icon: 'image',        label: 'MAP' },
-  { path: '/evidence',   icon: 'file-search',  label: 'LOGS' },
-  { path: '/skills',     icon: 'brain',        label: 'SKILLS' }
-];
-
-const NAV_TABS_DEFENDER = [
-  { path: '/ops',        icon: 'shield',       label: 'DEFENSE' },
-  { path: '/evidence',   icon: 'file-search',  label: 'EVIDENCE' },
-  { path: '/whiteboard', icon: 'image',        label: 'NETWORK' },
-  { path: '/skills',     icon: 'brain',        label: 'SKILLS' }
+  { path: '/video',      icon: 'video',        label: 'TRAINING' },
+  { path: '/game',       icon: 'activity',     label: 'LOGS' },
+  { path: '/export',     icon: 'download',     label: 'EXPORT' }
 ];
 
 function renderNav() {
-  const tabs = state.role === 'attacker' ? NAV_TABS_ATTACKER : NAV_TABS_DEFENDER;
   const here = currentPath();
   const el = document.getElementById('bottomnav');
   if (!el) return;
-  el.innerHTML = tabs.map(t => `
+  el.innerHTML = NAV_TABS.map(t => `
     <button data-path="${t.path}" class="${here === t.path ? 'active' : ''}">
       <i data-lucide="${t.icon}" class="w-4 h-4"></i>
       <span>${t.label}</span>
@@ -300,144 +223,96 @@ function renderNav() {
 function renderShell() { renderTopbar(); renderStats(); renderNav(); }
 
 // ============================================================
-// AUTHORIZATION & CHARACTER SELECTION GATE
+// SCREENS: AUTH & BRIEFING
 // ============================================================
-function renderAuthGate() {
+function renderAuthAndRole() {
   const app = document.getElementById('app');
   app.innerHTML = `
     <div class="fixed inset-0 z-50 bg-cyberdark flex items-center justify-center p-4 overflow-y-auto">
-      <div class="max-w-md w-full bg-cybercard border border-cyberborder rounded-2xl p-6 space-y-4 shadow-2xl text-center my-auto">
+      <div class="max-w-md w-full bg-cybercard border border-cyberborder rounded-2xl p-6 space-y-4 text-center my-auto">
         <div class="w-16 h-16 rounded-2xl bg-cyberblue/10 border border-cyberblue/30 mx-auto flex items-center justify-center">
           <i data-lucide="shield-alert" class="w-8 h-8 text-cyberblue"></i>
         </div>
-        <div>
-          <h1 class="font-mono text-lg font-bold text-white">CYBERSHIFT SIMULATOR</h1>
-          <p class="text-xs text-slate-400 mt-1">Dual-Perspective Cybersecurity & Threat Mindset Training</p>
-        </div>
-
-        <div class="space-y-3 text-left">
-          <label class="text-[10px] font-mono text-slate-400 uppercase">Lab Passcode Required</label>
-          <input type="password" id="passcode-input" placeholder="Passcode (Default: CYBER2026)" 
-            class="w-full bg-cyberdark border border-cyberborder rounded-lg px-3 py-2 text-center text-sm font-mono text-white focus:outline-none focus:border-cyberblue">
-        </div>
-
-        <div class="space-y-3 pt-2">
-          <div class="text-[10px] font-mono text-slate-400 uppercase text-left">Select Your Operative Perspective</div>
-          
-          <button data-role="attacker" class="tap-card border-cyberred/40 hover:border-cyberred">
-            <div class="w-10 h-10 rounded-lg bg-cyberred/15 flex items-center justify-center shrink-0">
-              <i data-lucide="terminal" class="w-5 h-5 text-cyberred"></i>
-            </div>
-            <div class="flex-1">
-              <div class="font-mono text-xs font-bold text-cyberred">ROB U. (Red Team / Attacker)</div>
-              <div class="text-[10px] text-slate-400">Childhood abandonment survivor. Master of evasion, automated pipelines & retribution.</div>
+        <h1 class="font-mono text-lg font-bold text-white">CYBERSHIFT ACADEMIC LAB</h1>
+        <p class="text-xs text-slate-400">Dual-Perspective Threat Mindset & Incident Defense Training</p>
+        
+        <input type="password" id="passcode" placeholder="Lab Passcode (CYBER2026)" class="w-full bg-cyberdark border border-cyberborder rounded-lg p-2 text-center text-sm font-mono text-white">
+        
+        <div class="space-y-2 pt-2">
+          <button onclick="window.initRole('attacker')" class="tap-card border-cyberred/40">
+            <i data-lucide="terminal" class="w-5 h-5 text-cyberred"></i>
+            <div>
+              <div class="font-mono text-xs font-bold text-cyberred">Play Rob U. (Attacker Mindset)</div>
+              <div class="text-[10px] text-slate-400">Master identity assembly, neobank application stacking & bust-out mechanics.</div>
             </div>
           </button>
-
-          <button data-role="defender" class="tap-card border-cybergreen/40 hover:border-cybergreen">
-            <div class="w-10 h-10 rounded-lg bg-cybergreen/15 flex items-center justify-center shrink-0">
-              <i data-lucide="shield-check" class="w-5 h-5 text-cybergreen"></i>
-            </div>
-            <div class="flex-1">
-              <div class="font-mono text-xs font-bold text-cybergreen">CRAIG BLUEBIRD (Cyber Officer)</div>
-              <div class="text-[10px] text-slate-400">Ghetto survivor turned military defender. Dedicated to dismantling threats & protecting systems.</div>
+          <button onclick="window.initRole('defender')" class="tap-card border-cybergreen/40">
+            <i data-lucide="shield-check" class="w-5 h-5 text-cybergreen"></i>
+            <div>
+              <div class="font-mono text-xs font-bold text-cybergreen">Play Craig Bluebird (Cyber Officer)</div>
+              <div class="text-[10px] text-slate-400">Hunt consortium velocity anomalies, parse logs & export e-SAR reports.</div>
             </div>
           </button>
         </div>
       </div>
     </div>`;
   icons();
-
-  document.querySelectorAll('button[data-role]').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const passcode = document.getElementById('passcode-input').value.trim();
-      if (passcode !== LAB_PASSCODE) {
-        toast('Invalid Lab Passcode (Use CYBER2026)');
-        haptic([40, 60, 40]);
-        return;
-      }
-      haptic(15);
-      selectRole(btn.dataset.role);
-      boot();
-    });
-  });
 }
 
-// ============================================================
-// CHARACTER BRIEFING STORY SCREEN
-// ============================================================
 function renderBriefing() {
   const app = document.getElementById('app');
-  const isAttacker = state.role === 'attacker';
-  
+  const isAtk = state.role === 'attacker';
   app.innerHTML = `
     <div class="fixed inset-0 z-50 bg-cyberdark flex items-center justify-center p-4 overflow-y-auto">
-      <div class="max-w-lg w-full bg-cybercard border ${isAttacker ? 'border-cyberred/50' : 'border-cybergreen/50'} rounded-2xl p-6 space-y-4 shadow-2xl my-auto">
-        <div class="flex items-center gap-3">
-          <div class="w-12 h-12 rounded-xl ${isAttacker ? 'bg-cyberred/20 text-cyberred' : 'bg-cybergreen/20 text-cybergreen'} flex items-center justify-center shrink-0">
-            <i data-lucide="${isAttacker ? 'user-x' : 'shield'}" class="w-6 h-6"></i>
-          </div>
-          <div>
-            <div class="font-mono text-[10px] text-slate-400 uppercase">OPERATIVE DOSSIER</div>
-            <h2 class="font-mono text-base font-bold text-white">${isAttacker ? 'Robert "Rob U." Ulbrick' : 'Craig Bluebird'}</h2>
-          </div>
-        </div>
-
-        <div class="text-xs text-slate-300 leading-relaxed font-sans space-y-3 bg-cyberdark p-4 rounded-xl border border-cyberborder">
-          ${isAttacker ? `
-            <p><strong>Background:</strong> Stranded by his mother at age 6, Rob grew up inside an institutional facility where a donated terminal was his only companion. Malnourished and physically underdeveloped in his legs due to early neglect, traditional physical work was out of the question.</p>
-            <p><strong>The Mindset:</strong> Computers became his world. Coding and evasion became his armor against bullies and abandonment. Cyber attacks are his method of seeking systemic retribution and securing survival for his young family.</p>
+      <div class="max-w-md w-full bg-cybercard border border-cyberborder rounded-2xl p-6 space-y-4 my-auto">
+        <div class="font-mono text-xs text-cyberblue uppercase">${isAtk ? 'Attacker Dossier · Rob U.' : 'Officer Dossier · Craig Bluebird'}</div>
+        <div class="text-xs text-slate-300 leading-relaxed font-sans space-y-2 bg-cyberdark p-4 rounded-xl border border-cyberborder">
+          ${isAtk ? `
+            <p><strong>Background:</strong> Abandoned at age 6, raised in an institution with a single donated computer terminal. Physically disabled in his legs from early malnutrition, code became his equalizer against childhood bullies and systemic abandonment.</p>
+            <p><strong>Objective:</strong> Execute the 11-stage breakout missions across ${NEOBANKS.join(', ')} before risk engines catch your velocity.</p>
           ` : `
-            <p><strong>Background:</strong> Raised in the inner-city ghetto, Craig knew early on that systemic crime only led to dead ends. The military offered a pathway out, discipline, and a rigorous technical foundation in network defense.</p>
-            <p><strong>The Mission:</strong> Now a senior financial cybersecurity officer, Craig leverages his understanding of attacker psychology to architect impenetrable pipeline defenses, hunt threats, and protect institutions from malicious exploitation.</p>
+            <p><strong>Background:</strong> Ghetto survivor turned military veteran and senior financial cybersecurity officer.</p>
+            <p><strong>Objective:</strong> Parse intercepted telemetry logs, trace TLS fingerprint collisions, and compile certified e-SAR referral packages.</p>
           `}
         </div>
 
-        <button id="start-sim" class="w-full py-3 ${isAttacker ? 'bg-cyberred text-white' : 'bg-cybergreen text-black'} font-mono font-bold text-xs rounded-xl shadow-lg">
-          INITIALIZE SIMULATION ENVIRONMENT →
-        </button>
+        <div class="space-y-1">
+          <div class="text-[10px] font-mono text-slate-400 uppercase">Operational Training Briefing Video:</div>
+          <div class="w-full bg-slate-900 border border-cyberborder rounded-lg overflow-hidden p-2 text-center">
+            <iframe class="w-full h-48 rounded" src="https://www.youtube-nocookie.com/embed/videoseries?list=PLDzeHZWIZsTo0wSBdqtT4z739ZzR5qj8j" title="Cybersecurity Training" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+            <span class="text-[10px] font-mono text-slate-500 mt-1 block">The video above demonstrates real-world incident response and SOC workflows.</span>
+          </div>
+        </div>
+
+        <button onclick="window.startSim()" class="w-full py-3 bg-cyberblue text-black font-mono font-bold text-xs rounded-xl">ENTER SIMULATION →</button>
       </div>
     </div>`;
   icons();
-
-  document.getElementById('start-sim').addEventListener('click', () => {
-    dispatch(s => { s.phase = 'active'; });
-    haptic(20);
-    navigate('/ops');
-    render();
-  });
 }
 
 // ============================================================
-// PAGE: BREAKOUT MISSIONS & DEFENSE OPS
+// PAGES: OPS, FORGE, VIDEO TRAINING, GAME, EXPORT
 // ============================================================
 const opsPage = {
   async mount(root) {
-    const isAttacker = state.role === 'attacker';
     const stage = STAGES[state.currentStageIndex] || STAGES[10];
+    const isAtk = state.role === 'attacker';
 
     root.innerHTML = `
       <div class="p-4 space-y-4">
-        <!-- Difficulty & Perspective Banner -->
-        <div class="flex items-center justify-between bg-cybercard border border-cyberborder p-3 rounded-xl text-xs">
-          <div>
-            <div class="text-[10px] font-mono text-slate-400">OPERATIVE</div>
-            <div class="font-mono font-bold ${isAttacker ? 'text-cyberred' : 'text-cybergreen'}">${isAttacker ? 'Rob U. (Attacker)' : 'Craig B. (Officer)'}</div>
-          </div>
-          <div class="flex gap-1 font-mono font-bold">
+        <div class="flex items-center justify-between bg-cybercard border border-cyberborder p-2 rounded-xl text-xs">
+          <span class="text-slate-400 font-mono">DIFFICULTY:</span>
+          <div class="flex gap-2 font-mono font-bold">
             ${['EASY', 'MEDIUM', 'HACKER'].map(d => `
-              <button data-diff="${d}" class="px-2 py-1 rounded text-[10px] ${state.difficulty === d ? 'bg-cyberblue text-black' : 'text-slate-500 bg-cyberdark'}">
-                ${d}
-              </button>
+              <button data-diff="${d}" class="px-2 py-1 rounded ${state.difficulty === d ? 'bg-cyberblue text-black' : 'text-slate-500 bg-cyberdark'}">${d}</button>
             `).join('')}
           </div>
         </div>
 
-        <!-- Mission Stage Panel -->
-        <div class="bg-cybercard border ${isAttacker ? 'border-cyberred/40' : 'border-cybergreen/40'} rounded-xl p-4 space-y-3">
+        <div class="bg-cybercard border ${isAtk ? 'border-cyberred/40' : 'border-cybergreen/40'} rounded-xl p-4 space-y-3">
           <div class="flex justify-between items-center border-b border-cyberborder pb-2">
             <div class="flex items-center gap-2">
-              <i data-lucide="${stage.icon}" class="w-5 h-5 ${isAttacker ? 'text-cyberred' : 'text-cybergreen'}"></i>
+              <i data-lucide="${stage.icon}" class="w-5 h-5 ${isAtk ? 'text-cyberred' : 'text-cybergreen'}"></i>
               <span class="font-mono text-sm font-bold text-white">${stage.title}</span>
             </div>
             <span class="text-xs font-mono text-cyberamber">MISSION ${stage.id}/11</span>
@@ -448,39 +323,24 @@ const opsPage = {
               <div>
                 <div class="text-[10px] font-mono text-slate-400 uppercase font-bold mb-1">${key}:</div>
                 <div class="flex flex-wrap gap-1">
-                  ${opts.map(opt => `
-                    <button class="opt-btn text-[11px] bg-cyberdark hover:bg-slate-800 text-slate-200 px-2 py-1 rounded border border-cyberborder font-mono">
-                      ${opt}
-                    </button>
-                  `).join('')}
+                  ${opts.map(opt => `<button class="opt-btn text-[11px] bg-cyberdark hover:bg-slate-800 text-slate-200 px-2 py-1 rounded border border-cyberborder font-mono">${opt}</button>`).join('')}
                 </div>
               </div>
             `).join('')}
 
-            ${stage.id === 9 && isAttacker ? `
-              <div class="p-3 bg-cyberdark border border-cyberborder rounded-lg space-y-2">
-                <div class="text-xs font-mono text-slate-300">Bookie Operations Wager:</div>
-                <div class="flex gap-2">
-                  <button id="bet-low" class="px-3 py-1 bg-cybergreen text-black text-xs font-bold font-mono rounded">Low Risk (70%)</button>
-                  <button id="bet-high" class="px-3 py-1 bg-cyberred text-white text-xs font-bold font-mono rounded">High Risk (30%)</button>
-                </div>
-              </div>
-            ` : ''}
-
-            <button id="execute-btn" class="w-full mt-3 ${isAttacker ? 'bg-cyberred text-white' : 'bg-cybergreen text-black'} text-xs font-mono font-bold py-3 rounded-lg flex items-center justify-center gap-2">
-              ${isAttacker ? 'Execute Offensive Mission' : 'Harden System & Verify Defense'} <i data-lucide="arrow-right" class="w-4 h-4"></i>
+            <button id="execute-btn" class="w-full mt-3 ${isAtk ? 'bg-cyberred text-white' : 'bg-cybergreen text-black'} text-xs font-mono font-bold py-3 rounded-lg flex items-center justify-center gap-2">
+              Execute Mission Stage <i data-lucide="arrow-right" class="w-4 h-4"></i>
             </button>
           </div>
         </div>
 
-        <!-- Terminal Output -->
-        <div class="bg-cyberdark border border-cyberborder rounded-xl p-3 h-48 flex flex-col justify-between font-mono text-xs">
-          <div class="text-[10px] text-slate-500 border-b border-cyberborder pb-1">TERMINAL LOGS (TTY ENCRYPTED)</div>
-          <div id="term-logs" class="overflow-y-auto space-y-1 my-2 text-slate-300">
+        <div class="bg-cyberdark border border-cyberborder rounded-xl p-3 h-44 flex flex-col justify-between font-mono text-xs">
+          <div class="text-[10px] text-slate-500 border-b border-cyberborder pb-1">TTY TERMINAL LOGS</div>
+          <div class="overflow-y-auto space-y-1 my-2 text-slate-300">
             ${state.logs.map(l => `<div>${l}</div>`).join('')}
           </div>
           <form id="term-form" class="flex gap-2 border-t border-cyberborder pt-1">
-            <span class="${isAttacker ? 'text-cyberred' : 'text-cybergreen'} font-bold">&gt;</span>
+            <span class="${isAtk ? 'text-cyberred' : 'text-cybergreen'} font-bold">&gt;</span>
             <input id="term-input" type="text" placeholder="Type 'status', 'advance', 'help', or 'clear'..." class="bg-transparent text-xs text-white focus:outline-none flex-1">
           </form>
         </div>
@@ -489,24 +349,15 @@ const opsPage = {
 
     root.querySelectorAll('button[data-diff]').forEach(b => {
       b.addEventListener('click', () => {
-        dispatch(s => {
-          s.difficulty = b.dataset.diff;
-          if (s.difficulty === 'EASY') s.capital = 100000;
-          if (s.difficulty === 'MEDIUM') s.capital = 25000;
-          if (s.difficulty === 'HACKER') s.capital = 2500;
-        });
-        toast(`Difficulty: ${b.dataset.diff}`);
-        renderShell();
-        opsPage.mount(root);
+        state.difficulty = b.dataset.diff;
+        if (state.difficulty === 'EASY') state.capital = 100000;
+        if (state.difficulty === 'MEDIUM') state.capital = 25000;
+        if (state.difficulty === 'HACKER') state.capital = 2500;
+        notify();
       });
     });
 
-    root.querySelectorAll('.opt-btn').forEach(b => {
-      b.addEventListener('click', () => { toast(`Selected: ${b.textContent.trim()}`); });
-    });
-
-    root.querySelector('#execute-btn')?.addEventListener('click', () => { executeStage(); });
-
+    root.querySelector('#execute-btn')?.addEventListener('click', () => executeStage());
     root.querySelector('#term-form')?.addEventListener('submit', (e) => {
       e.preventDefault();
       const input = root.querySelector('#term-input');
@@ -514,84 +365,37 @@ const opsPage = {
       if (!cmd) return;
       input.value = '';
 
-      dispatch(s => { s.logs.push(`> ${cmd}`); });
-      if (cmd === 'help') {
-        dispatch(s => { s.logs.push('[SYS] Commands: advance, status, clear, help'); });
-      } else if (cmd === 'status') {
-        dispatch(s => { s.logs.push(`[STATUS] Heat: ${s.paranoia}% | Case: ${s.caseStrength}% | Credits: $${s.capital}`); });
-      } else if (cmd === 'clear') {
-        dispatch(s => { s.logs = []; });
-      } else if (cmd === 'advance') {
-        executeStage();
-        return;
-      } else {
-        dispatch(s => { s.logs.push(`[ERR] Unknown command: ${cmd}`); });
-      }
-      opsPage.mount(root);
+      state.logs.push(`> ${cmd}`);
+      if (cmd === 'help') state.logs.push('[SYS] Commands: advance, status, clear, help');
+      else if (cmd === 'status') state.logs.push(`[STATUS] Heat: ${state.heat}% | Case: ${state.caseStrength}% | Credits: $${state.capital}`);
+      else if (cmd === 'clear') state.logs = [];
+      else if (cmd === 'advance') { executeStage(); return; }
+      else state.logs.push(`[ERR] Unknown: ${cmd}`);
+      notify();
     });
 
     function executeStage() {
-      dispatch(s => {
-        const mod = s.difficulty === 'EASY' ? 0.5 : s.difficulty === 'MEDIUM' ? 1.0 : 2.0;
-        const inc = Math.floor((Math.random() * 8 + 4) * mod);
-        const cost = Math.floor(Math.random() * 800 + 200);
+      const heatMod = state.difficulty === 'EASY' ? 0.5 : state.difficulty === 'MEDIUM' ? 1.0 : 2.0;
+      const inc = Math.floor((Math.random() * 8 + 4) * heatMod);
+      const cost = Math.floor(Math.random() * 800 + 200);
 
-        if (s.role === 'attacker') {
-          s.paranoia = clamp(s.paranoia + inc);
-          s.capital = Math.max(0, s.capital - cost);
-          s.logs.push(`[${new Date().toLocaleTimeString()}] Offensive Stage ${stage.id} executed. Heat: +${inc}%`);
-        } else {
-          s.caseStrength = clamp(s.caseStrength + 10);
-          s.logs.push(`[${new Date().toLocaleTimeString()}] Defensive Control ${stage.id} verified. Case Strength: +10%`);
-        }
-
-        s.breakoutState[stage.id] = true;
-        s.evidence.push({
-          id: `ev_${Date.now()}`,
-          stage: stage.title,
-          timestamp: new Date().toLocaleTimeString(),
-          fidelity: `${Math.floor(80 + Math.random() * 20)}%`
-        });
-
-        if (s.currentStageIndex < STAGES.length - 1) {
-          s.currentStageIndex += 1;
-        } else {
-          s.logs.push(`[SIMULATION COMPLETE] All 11 Operational Milestones Achieved.`);
-        }
-      });
-      haptic(20);
-      renderShell();
-      opsPage.mount(root);
+      if (state.role === 'attacker') {
+        state.heat = clamp(state.heat + inc);
+        state.capital = Math.max(0, state.capital - cost);
+        state.logs.push(`[${new Date().toLocaleTimeString()}] Stage ${stage.id} executed. Cost: $${cost}, Heat: +${inc}%`);
+      } else {
+        state.caseStrength = clamp(state.caseStrength + 10);
+        state.logs.push(`[${new Date().toLocaleTimeString()}] Defense Stage ${stage.id} verified. Case Strength: +10%`);
+      }
+      state.breakoutState[stage.id] = true;
+      if (state.currentStageIndex < STAGES.length - 1) state.currentStageIndex += 1;
+      else state.logs.push('[OPS COMPLETE] All 11 Breakout Missions Executed.');
+      notify();
     }
-
-    root.querySelector('#bet-low')?.addEventListener('click', () => handleWager(0.7));
-    root.querySelector('#bet-high')?.addEventListener('click', () => handleWager(0.3));
-
-    function handleWager(ratio) {
-      dispatch(s => {
-        const wager = 1000;
-        if (s.capital < wager) { toast('Insufficient funds'); return; }
-        if (Math.random() < ratio) {
-          s.capital += wager * 2;
-          s.logs.push(`[WAGER WIN] +$${wager * 2}`);
-          toast('Wager Won!');
-        } else {
-          s.capital -= wager;
-          s.logs.push(`[WAGER LOST] -$${wager}`);
-          toast('Wager Lost.');
-        }
-      });
-      renderShell();
-      opsPage.mount(root);
-    }
-
     icons();
   }
 };
 
-// ============================================================
-// PAGE: FORGERY & SYNTHETIC CANVAS STUDIO
-// ============================================================
 const forgePage = {
   async mount(root) {
     root.innerHTML = `
@@ -601,219 +405,150 @@ const forgePage = {
             <i data-lucide="layers" class="w-4 h-4"></i> Synthetic Visual Rendering Engine
           </h2>
           <div class="space-y-1">
-            ${[
-              'Passport & Driver License',
-              'Birth Certificate & SSN',
-              'Corporate Deed & Mortgage',
-              'Cashier Check & Payroll'
-            ].map(doc => `
-              <button data-doc="${doc}" class="w-full text-left p-2 rounded text-xs font-mono border ${state.selectedForgeDoc === doc ? 'bg-cyberpurple/20 border-cyberpurple text-white' : 'bg-cyberdark border-cyberborder text-slate-400'}">
-                ${doc}
-              </button>
+            ${['Passport & Driver License', 'Birth Certificate & SSN', 'Corporate Deed & Mortgage', 'Cashier Check & Payroll'].map(doc => `
+              <button data-doc="${doc}" class="w-full text-left p-2 rounded text-xs font-mono border ${state.selectedForgeDoc === doc ? 'bg-cyberpurple/20 border-cyberpurple text-white' : 'bg-cyberdark border-cyberborder text-slate-400'}">${doc}</button>
             `).join('')}
           </div>
-          <button id="render-forge" class="w-full py-3 bg-cyberpurple text-white text-xs font-mono font-bold rounded-lg">
-            Render Synthetic Document Canvas
-          </button>
+          <button id="render-forge" class="w-full py-3 bg-cyberpurple text-white text-xs font-mono font-bold rounded-lg">Render Canvas Document Payload</button>
         </div>
-
-        <div class="bg-cyberdark border border-cyberborder rounded-xl p-4 flex flex-col items-center justify-center min-h-[260px]">
-          <canvas id="forge-canvas" width="300" height="180" class="border border-cyberpurple/40 rounded-lg shadow-lg bg-slate-900 mb-3"></canvas>
-          <div id="forge-meta" class="w-full font-mono text-xs text-slate-400 space-y-1">
-            ${state.forgeOutput ? `
-              <div class="text-cyberpurple font-bold">${state.forgeOutput.type}</div>
-              <div>DOC ID: ${state.forgeOutput.id}</div>
-              <div class="text-cybergreen">CHECKSUM: VERIFIED</div>
-              <div>HASH: ${state.forgeOutput.hash}</div>
-            ` : '<div class="text-center text-slate-500">Select template and render payload.</div>'}
+        <div class="bg-cyberdark border border-cyberborder rounded-xl p-4 flex flex-col items-center justify-center min-h-[240px]">
+          <canvas id="forge-canvas" width="280" height="160" class="border border-cyberpurple/40 rounded-lg shadow-lg bg-slate-900 mb-3"></canvas>
+          <div class="w-full font-mono text-xs text-slate-400 space-y-1">
+            ${state.forgeOutput ? `<div class="text-cyberpurple font-bold">${state.forgeOutput.type}</div><div>ID: ${state.forgeOutput.id}</div><div class="text-cybergreen">HASH: ${state.forgeOutput.hash}</div>` : '<div class="text-center text-slate-500">Select template and render.</div>'}
           </div>
         </div>
-      </div>
-    `;
+      </div>`;
 
     root.querySelectorAll('button[data-doc]').forEach(b => {
-      b.addEventListener('click', () => {
-        dispatch(s => { s.selectedForgeDoc = b.dataset.doc; });
-        forgePage.mount(root);
-      });
+      b.addEventListener('click', () => { state.selectedForgeDoc = b.dataset.doc; forgePage.mount(root); });
     });
 
     const canvas = root.querySelector('#forge-canvas');
     if (canvas && state.forgeOutput) {
-      drawDocumentCanvas(canvas, state.forgeOutput);
-    } else if (canvas) {
       const ctx = canvas.getContext('2d');
-      ctx.fillStyle = '#1e293b';
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-      ctx.fillStyle = '#64748b';
-      ctx.font = '12px "JetBrains Mono"';
-      ctx.fillText('CANVAS STANDBY', 90, 95);
+      ctx.fillStyle = '#0f172a'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.strokeStyle = '#a855f7'; ctx.lineWidth = 2; ctx.strokeRect(5, 5, canvas.width - 10, canvas.height - 10);
+      ctx.fillStyle = '#38bdf8'; ctx.font = 'bold 10px "JetBrains Mono"'; ctx.fillText('SYNTHETIC PAYLOAD', 15, 25);
+      ctx.fillStyle = '#cbd5e1'; ctx.font = '9px "JetBrains Mono"';
+      ctx.fillText(`TYPE: ${state.forgeOutput.type}`, 15, 50);
+      ctx.fillText(`ID: ${state.forgeOutput.id}`, 15, 70);
+      ctx.fillText(`HASH: ${state.forgeOutput.hash}`, 15, 90);
     }
 
     root.querySelector('#render-forge')?.addEventListener('click', () => {
-      const output = {
-        type: state.selectedForgeDoc,
-        id: `FRG-${Math.floor(100000 + Math.random() * 900000)}`,
-        assignedIp: `192.168.${Math.floor(Math.random()*255)}.${Math.floor(Math.random()*255)}`,
-        hash: Math.random().toString(36).substring(2, 12).toUpperCase()
-      };
-      dispatch(s => { s.forgeOutput = output; });
-      haptic(15);
-      forgePage.mount(root);
+      state.forgeOutput = { type: state.selectedForgeDoc, id: `FRG-${Math.floor(100000 + Math.random() * 900000)}`, hash: Math.random().toString(36).substring(2, 12).toUpperCase() };
+      haptic(15); forgePage.mount(root);
     });
-
     icons();
   }
 };
 
-function drawDocumentCanvas(canvas, output) {
-  const ctx = canvas.getContext('2d');
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-  ctx.fillStyle = '#0f172a';
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-  ctx.strokeStyle = '#a855f7';
-  ctx.lineWidth = 2;
-  ctx.strokeRect(5, 5, canvas.width - 10, canvas.height - 10);
-  ctx.fillStyle = '#38bdf8';
-  ctx.font = 'bold 11px "JetBrains Mono"';
-  ctx.fillText('SYNTHETIC DOCUMENT PAYLOAD', 15, 25);
-  ctx.fillStyle = '#cbd5e1';
-  ctx.font = '10px "JetBrains Mono"';
-  ctx.fillText(`TYPE: ${output.type}`, 15, 50);
-  ctx.fillText(`ID: ${output.id}`, 15, 70);
-  ctx.fillText(`IP: ${output.assignedIp}`, 15, 90);
-  ctx.fillText(`HASH: ${output.hash}`, 15, 110);
-  ctx.fillStyle = '#10b981';
-  ctx.fillRect(15, 130, 80, 25);
-  ctx.fillStyle = '#0a0f1d';
-  ctx.font = 'bold 10px "JetBrains Mono"';
-  ctx.fillText('VERIFIED', 30, 146);
-}
-
-// ============================================================
-// PAGE: INTERACTIVE WHITEBOARD MAP
-// ============================================================
-const whiteboardPage = {
-  async mount(root) {
-    root.innerHTML = `
-      <div class="p-4 space-y-4">
-        <div class="bg-cybercard border border-cyberborder rounded-xl p-4">
-          <h2 class="font-mono text-xs uppercase tracking-wider text-cybergreen mb-3">Tactical Network Node Canvas</h2>
-          <canvas id="map-canvas" width="320" height="240" class="w-full bg-slate-900 border border-cyberborder rounded-lg mb-3"></canvas>
-          <div class="grid grid-cols-2 gap-2 font-mono text-[11px]">
-            <div class="p-2 bg-cyberdark border border-cyberblue/40 rounded text-cyberblue">Node A: Pipeline</div>
-            <div class="p-2 bg-cyberdark border border-cyberpurple/40 rounded text-cyberpurple">Node B: Entity</div>
-            <div class="p-2 bg-cyberdark border border-cybergreen/40 rounded text-cybergreen">Node C: Treasury</div>
-            <div class="p-2 bg-cyberdark border border-cyberred/40 rounded text-cyberred">Node D: Espionage</div>
-          </div>
-        </div>
-      </div>
-    `;
-    const canvas = root.querySelector('#map-canvas');
-    if (canvas) drawNodeMap(canvas);
-    icons();
-  }
-};
-
-function drawNodeMap(canvas) {
-  const ctx = canvas.getContext('2d');
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-  const nodes = [
-    { x: 50, y: 50, label: 'Pipeline', color: '#38bdf8' },
-    { x: 270, y: 50, label: 'Entity', color: '#a855f7' },
-    { x: 50, y: 190, label: 'Treasury', color: '#10b981' },
-    { x: 270, y: 190, label: 'Espionage', color: '#f43f5e' }
-  ];
-  ctx.strokeStyle = '#334155';
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.moveTo(nodes[0].x, nodes[0].y); ctx.lineTo(nodes[1].x, nodes[1].y);
-  ctx.moveTo(nodes[1].x, nodes[1].y); ctx.lineTo(nodes[3].x, nodes[3].y);
-  ctx.moveTo(nodes[3].x, nodes[3].y); ctx.lineTo(nodes[2].x, nodes[2].y);
-  ctx.moveTo(nodes[2].x, nodes[2].y); ctx.lineTo(nodes[0].x, nodes[0].y);
-  ctx.stroke();
-  nodes.forEach(n => {
-    ctx.fillStyle = n.color;
-    ctx.beginPath();
-    ctx.arc(n.x, n.y, 14, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = '#ffffff';
-    ctx.font = '10px "JetBrains Mono"';
-    ctx.fillText(n.label, n.x - 20, n.y + 28);
-  });
-}
-
-// ============================================================
-// PAGE: EVIDENCE LEDGER
-// ============================================================
-const evidencePage = {
-  async mount(root) {
-    root.innerHTML = `
-      <div class="p-4 space-y-3 font-mono text-xs">
-        <h2 class="text-slate-400 uppercase tracking-wider">Evidence & Telemetry Logs</h2>
-        ${state.evidence.length === 0 ? `
-          <div class="bg-cybercard border border-cyberborder rounded-xl p-6 text-center text-slate-500">
-            No telemetry logged yet. Execute mission stages to build evidence.
-          </div>
-        ` : state.evidence.map(e => `
-          <div class="bg-cybercard border border-cyberborder p-3 rounded-lg flex justify-between items-center">
-            <div>
-              <div class="text-white font-bold">${e.stage}</div>
-              <div class="text-[10px] text-slate-500">${e.timestamp}</div>
-            </div>
-            <span class="px-2 py-1 bg-cyberblue/10 text-cyberblue rounded text-[10px] font-bold">
-              FIDELITY: ${e.fidelity}
-            </span>
-          </div>
-        `).join('')}
-      </div>
-    `;
-    icons();
-  }
-};
-
-// ============================================================
-// PAGE: SKILLS TREE
-// ============================================================
-const skillsPage = {
+const videoTrainingPage = {
   async mount(root) {
     root.innerHTML = `
       <div class="p-4 space-y-4 font-mono text-xs">
-        <div class="bg-cybercard border border-cyberborder rounded-xl p-4 flex justify-between items-center">
-          <div>
-            <div class="text-slate-400">LEVEL</div>
-            <div class="text-xl font-bold text-white">${state.progression.level}</div>
-          </div>
-          <div>
-            <div class="text-slate-400">SKILL POINTS</div>
-            <div class="text-xl font-bold text-cyberpurple">${state.progression.skillPoints}</div>
+        <h2 class="uppercase text-slate-400">Cybersecurity Training Academy & Video Walkthroughs</h2>
+        <div class="text-slate-300 text-[11px]">Watch professional walkthroughs on incident response, threat hunting, and SOC analysis.</div>
+        
+        <div class="bg-cybercard border border-cyberborder rounded-xl p-3 space-y-2">
+          <div class="text-white font-bold">Module 1: Incident Response & SOC Operations</div>
+          <div class="w-full bg-slate-900 border border-cyberborder rounded-lg overflow-hidden p-2 text-center">
+            <iframe class="w-full h-48 rounded" src="https://www.youtube-nocookie.com/embed/videoseries?list=PLDzeHZWIZsTo0wSBdqtT4z739ZzR5qj8j" title="Incident Response" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
           </div>
         </div>
 
+        <div class="bg-cybercard border border-cyberborder rounded-xl p-3 space-y-2">
+          <div class="text-white font-bold">Module 2: Threat Intelligence & Forensic Analysis</div>
+          <div class="w-full bg-slate-900 border border-cyberborder rounded-lg overflow-hidden p-2 text-center">
+            <iframe class="w-full h-48 rounded" src="https://www.youtube-nocookie.com/embed/videoseries?list=PLDzeHZWIZsPLt3qM6Xf13X7Y2cK1Y3n6Z" title="Threat Intelligence" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+          </div>
+        </div>
+      </div>`;
+    icons();
+  }
+};
+
+const gamePage = {
+  async mount(root) {
+    root.innerHTML = `
+      <div class="p-4 space-y-3 font-mono text-xs">
+        <h2 class="uppercase text-slate-400">Intercepted Telemetry Decryption Challenge</h2>
+        <div class="text-slate-300 text-[11px]">Parse encrypted network signatures into verifiable incident evidence.</div>
         <div class="space-y-2">
-          ${[
-            { id: 'ghost', name: 'Ghost Protocol', desc: 'Cuts heat gain by 25%' },
-            { id: 'stack', name: 'Stack Master', desc: 'Increases mission rewards' },
-            { id: 'mixer', name: 'Mixer Master', desc: 'Enhances Monero cleaning efficiency' }
-          ].map(s => `
-            <div class="bg-cybercard border border-cyberborder p-3 rounded-lg flex justify-between items-center">
-              <div>
-                <div class="text-white font-bold">${s.name}</div>
-                <div class="text-[10px] text-slate-400">${s.desc}</div>
+          ${state.decryptionLogs.map(l => `
+            <div class="p-3 bg-cybercard border ${l.decrypted ? 'border-cybergreen' : 'border-cyberborder'} rounded-xl space-y-1">
+              <div class="flex justify-between font-bold">
+                <span class="text-white">${l.id}</span>
+                <span class="${l.decrypted ? 'text-cybergreen' : 'text-cyberamber'}">${l.decrypted ? 'DECRYPTED' : 'ENCRYPTED'}</span>
               </div>
-              <button class="px-3 py-1 bg-cyberpurple text-white font-bold rounded">UNLOCK</button>
+              <div class="text-[10px] text-slate-400 font-mono">${l.decrypted ? l.val : l.raw}</div>
+              ${!l.decrypted ? `<button onclick="window.decryptLog('${l.id}')" class="mt-2 px-3 py-1 bg-cyberblue/20 text-cyberblue border border-cyberblue/40 rounded text-[10px] font-bold">PARSE PAYLOAD</button>` : ''}
             </div>
           `).join('')}
         </div>
-      </div>
-    `;
+      </div>`;
+    icons();
+  }
+};
+
+const exportPage = {
+  async mount(root) {
+    root.innerHTML = `
+      <div class="p-4 space-y-3 font-mono text-xs">
+        <h2 class="uppercase text-slate-400">e-SAR Package & Evidence Export</h2>
+        <div class="p-4 bg-cybercard border border-cyberborder rounded-xl space-y-3">
+          <div class="text-white font-bold">Certified Case Summary</div>
+          <div class="text-slate-300 text-[11px]">Export immutable forensic logs, decrypted TLS signatures, and telemetry metadata into a downloadable JSON evidence package.</div>
+          <button onclick="window.exportReport()" class="w-full py-3 bg-cybergreen text-black font-bold rounded-lg flex items-center justify-center gap-2">
+            <i data-lucide="file-json" class="w-4 h-4"></i> EXPORT e-SAR EVIDENCE PACKAGE (JSON)
+          </button>
+        </div>
+      </div>`;
     icons();
   }
 };
 
 // ============================================================
-// BOOT ENGINE
+// GLOBAL ACTIONS & BOOT
 // ============================================================
+window.initRole = (role) => {
+  const code = document.getElementById('passcode').value.trim();
+  if (code !== LAB_PASSCODE) { toast('Invalid Lab Passcode'); return; }
+  state.role = role; state.phase = 'briefing';
+  notify();
+};
+
+window.startSim = () => { state.phase = 'active'; notify(); navigate('/ops'); };
+window.setTab = (path) => navigate(path);
+
+window.decryptLog = (id) => {
+  const item = state.decryptionLogs.find(l => l.id === id);
+  if (item && !item.decrypted) {
+    item.decrypted = true;
+    state.decryptedCount += 1;
+    state.caseStrength = clamp(state.caseStrength + 25);
+    notify();
+    toast('Log Payload Parsed');
+  }
+};
+
+window.exportReport = () => {
+  const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(state, null, 2));
+  const downloadAnchor = document.createElement('a');
+  downloadAnchor.setAttribute("href", dataStr);
+  downloadAnchor.setAttribute("download", `eSAR_Case_Report_${Date.now()}.json`);
+  document.body.appendChild(downloadAnchor);
+  downloadAnchor.click();
+  downloadAnchor.remove();
+  toast('e-SAR Package Exported');
+};
+
+register('/ops', opsPage);
+register('/forge', forgePage);
+register('/video', videoTrainingPage);
+register('/game', gamePage);
+register('/export', exportPage);
+
 function boot() {
   const app = document.getElementById('app');
   app.innerHTML = `
@@ -823,23 +558,12 @@ function boot() {
       <main id="outlet" class="page-scroll"></main>
       <nav id="bottomnav" class="app-bottomnav safe-bottom"></nav>
     </div>`;
-
-  register('/ops', opsPage);
-  register('/forge', forgePage);
-  register('/whiteboard', whiteboardPage);
-  register('/evidence', evidencePage);
-  register('/skills', skillsPage);
-
-  renderShell();
   if (!location.hash) history.replaceState(null, '', '#/ops');
   render();
-
-  subscribe(() => { renderShell(); });
 }
 
 window.addEventListener('hashchange', render);
-if (!state.authenticated || !state.role) renderAuthGate();
-else boot();
+boot();
 
 })();
 </script>
